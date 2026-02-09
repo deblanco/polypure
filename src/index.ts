@@ -121,6 +121,36 @@ export interface BalanceAllowance {
   allowances: Record<string, string>;
 }
 
+export interface UserEarning {
+  date: string;
+  condition_id: string;
+  asset_address: string;
+  maker_address: string;
+  earnings: number;
+}
+
+export interface TotalUserEarning {
+  date: string;
+  asset_address: string;
+  maker_address: string;
+  earnings: number;
+  asset_rate: number;
+}
+
+export interface UserRewardsEarning {
+  condition_id: string;
+  question: string;
+  market_slug: string;
+  event_slug: string;
+  image: string;
+  earnings: number;
+  trades: number;
+  volume: number;
+  liquidity_provision: number;
+  lp_rewards_earned: number;
+  competition?: boolean;
+}
+
 export interface AuthConfig {
   apiKey: string;
   apiSecret: string;
@@ -529,6 +559,47 @@ export class PolymarketClient {
     await this.sdk.updateBalanceAllowance({
       asset_type: AssetType.COLLATERAL,
     });
+  }
+
+  // ========================================================================
+  // Profile & Earnings
+  // ========================================================================
+
+  /**
+   * Get user earnings for a specific date
+   * @param date - Date in YYYY-MM-DD format
+   */
+  async getUserEarnings(date: string): Promise<UserEarning[]> {
+    return this.sdk.getEarningsForUserForDay(date);
+  }
+
+  /**
+   * Get total user earnings for a specific date
+   * @param date - Date in YYYY-MM-DD format
+   */
+  async getTotalUserEarnings(date: string): Promise<TotalUserEarning[]> {
+    return this.sdk.getTotalEarningsForUserForDay(date);
+  }
+
+  /**
+   * Get user earnings with market details
+   * @param date - Date in YYYY-MM-DD format
+   * @param options - Optional query parameters
+   */
+  async getUserRewardsEarnings(
+    date: string,
+    options?: {
+      order_by?: string;
+      position?: string;
+      no_competition?: boolean;
+    }
+  ): Promise<UserRewardsEarning[]> {
+    return this.sdk.getUserEarningsAndMarketsConfig(
+      date,
+      options?.order_by,
+      options?.position,
+      options?.no_competition
+    );
   }
 
   // ========================================================================

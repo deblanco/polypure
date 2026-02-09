@@ -40,6 +40,7 @@ console.log(book.bids[0]);  // { price: 0.65, size: 1000 }
 - [Orderbooks](#orderbooks)
 - [Orders](#orders)
 - [Trades & Balances](#trades--balances)
+- [Profile & Earnings](#profile--earnings)
 - [Market Discovery](#market-discovery)
 - [Order Utilities](#order-utilities)
 - [Error Handling](#error-handling)
@@ -151,6 +152,31 @@ bun cli.ts allowance
 bun cli.ts trades -l 20
 ```
 
+#### Profile & Earnings (Auth Required)
+
+```bash
+# Get earnings for a specific date (default: today)
+bun cli.ts earnings 2024-01-15
+
+# Get total earnings for a date
+bun cli.ts total-earnings 2024-01-15
+
+# Get detailed rewards with market info
+bun cli.ts rewards 2024-01-15
+
+# Order rewards by volume
+bun cli.ts rewards 2024-01-15 --order-by volume
+
+# Filter by position (maker/taker)
+bun cli.ts rewards 2024-01-15 --position maker
+
+# Exclude competition rewards
+bun cli.ts rewards 2024-01-15 --no-competition
+
+# JSON output for analysis
+bun cli.ts rewards 2024-01-15 --json | jq '[.[] | {question, earnings, volume}]'
+```
+
 ### CLI Options
 
 | Option | Short | Description |
@@ -164,6 +190,9 @@ bun cli.ts trades -l 20
 | `--price` | | Order price (0-1) |
 | `--type` | | Order type: GTC, FOK, IOC |
 | `--limit` | `-l` | Limit results |
+| `--order-by` | | Order rewards by field (volume, earnings, etc.) |
+| `--position` | | Filter rewards by position (maker, taker) |
+| `--no-competition` | | Exclude competition rewards |
 | `--proxy` | | Gnosis Safe proxy address |
 | `--rpc` | | Polygon RPC URL |
 | `--funder` | | Funder address |
@@ -480,6 +509,91 @@ interface Trade {
 
 ---
 
+## Profile & Earnings
+
+Query your profile data, earnings, and rewards on Polymarket.
+
+### Get User Earnings for a Date
+
+```typescript
+// Get earnings for a specific date
+const earnings = await client.getUserEarnings("2024-01-15");
+
+for (const earning of earnings) {
+  console.log(`Market: ${earning.condition_id}`);
+  console.log(`Earnings: ${earning.earnings}`);
+  console.log(`Asset: ${earning.asset_address}`);
+}
+```
+
+### Get Total User Earnings
+
+```typescript
+// Get total earnings for a specific date
+const totalEarnings = await client.getTotalUserEarnings("2024-01-15");
+
+for (const total of totalEarnings) {
+  console.log(`Total Earnings: ${total.earnings}`);
+  console.log(`Asset Rate: ${total.asset_rate}`);
+}
+```
+
+### Get User Rewards with Market Details
+
+```typescript
+// Get detailed earnings with market info
+const rewards = await client.getUserRewardsEarnings("2024-01-15", {
+  order_by: "volume",
+  position: "maker",
+  no_competition: false,
+});
+
+for (const reward of rewards) {
+  console.log(`Market: ${reward.question}`);
+  console.log(`Slug: ${reward.market_slug}`);
+  console.log(`Earnings: ${reward.earnings}`);
+  console.log(`Trades: ${reward.trades}`);
+  console.log(`Volume: ${reward.volume}`);
+  console.log(`LP Rewards: ${reward.lp_rewards_earned}`);
+}
+```
+
+### Profile & Earnings Interfaces
+
+```typescript
+interface UserEarning {
+  date: string;
+  condition_id: string;
+  asset_address: string;
+  maker_address: string;
+  earnings: number;
+}
+
+interface TotalUserEarning {
+  date: string;
+  asset_address: string;
+  maker_address: string;
+  earnings: number;
+  asset_rate: number;
+}
+
+interface UserRewardsEarning {
+  condition_id: string;
+  question: string;
+  market_slug: string;
+  event_slug: string;
+  image: string;
+  earnings: number;
+  trades: number;
+  volume: number;
+  liquidity_provision: number;
+  lp_rewards_earned: number;
+  competition?: boolean;
+}
+```
+
+---
+
 ## Market Discovery
 
 Fetch markets from Gamma API (read-only, no auth required).
@@ -672,14 +786,19 @@ import type {
   OrderStatus,
   Trade,
   BalanceAllowance,
-  
+
+  // Profile & Earnings
+  UserEarning,
+  TotalUserEarning,
+  UserRewardsEarning,
+
   // Discovery
   Series,
   MarketInfo,
   OutcomeInfo,
   GammaEvent,
   GammaMarket,
-  
+
   // Client
   ClientOptions,
   AuthConfig,

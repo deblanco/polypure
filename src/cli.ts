@@ -30,12 +30,13 @@ import {
 // CLI Types
 // ============================================================================
 
-type Command = 
+type Command =
   | "market" | "markets" | "search"
   | "orderbook" | "book"
   | "buy" | "sell" | "cancel" | "orders"
   | "balance" | "allowance"
   | "trades"
+  | "earnings" | "total-earnings" | "rewards"
   | "series" | "find"
   | "derive"
   | "help";
@@ -51,6 +52,9 @@ interface CliOptions {
   price?: number;
   type?: OrderType;
   limit?: number;
+  orderBy?: string;
+  position?: string;
+  noCompetition?: boolean;
   proxy?: string;
   rpc?: string;
   funder?: string;
@@ -116,6 +120,17 @@ function parseArgs(args: string[]): { command: Command; args: string[]; options:
       case "-l":
         options.limit = parseInt(next);
         i++;
+        break;
+      case "--order-by":
+        options.orderBy = next;
+        i++;
+        break;
+      case "--position":
+        options.position = next;
+        i++;
+        break;
+      case "--no-competition":
+        options.noCompetition = true;
         break;
       case "--proxy":
         options.proxy = next;
@@ -505,7 +520,7 @@ async function cmdFind(args: string[], options: CliOptions): Promise<void> {
 async function cmdDerive(args: string[], options: CliOptions): Promise<void> {
   const client = createClient(options);
   const derived = await client.deriveApiKey();
-  
+
   if (options.json) {
     output(derived, options);
   } else {
@@ -518,9 +533,84 @@ async function cmdDerive(args: string[], options: CliOptions): Promise<void> {
   }
 }
 
+async function cmdEarnings(args: string[], options: CliOptions): Promise<void> {
+  const client = createClient(options);
+  const date = args[0] || new Date().toISOString().split('T')[0];
+
+  const earnings = await client.getUserEarnings(date);
+
+  if (options.json) {
+    output(earnings, options);
+  } else {
+    console.log(`💰 Earnings for ${date}:`);
+    console.log(`   Total entries: ${earnings.length}`);
+    console.log(`   Total earned: $${earnings.reduce((sum, e) => sum + e.earnings, 0).toFixed(2)}`);
+    if (earnings.length > 0) {
+      console.log("\n   Recent earnings:");
+      earnings.slice(0, 5).forEach(e => {
+        console.log(`   • $${e.earnings.toFixed(2)} - ${e.condition_id.slice(0, 10)}...`);
+      });
+    }
+  }
+}
+
+async function cmdTotalEarnings(args: string[], options: CliOptions): Promise<void> {
+  const client = createClient(options);
+  const date = args[0] || new Date().toISOString().split('T')[0];
+
+  const earnings = await client.getTotalUserEarnings(date);
+
+  if (options.json) {
+    output(earnings, options);
+  } else {
+    console.log(`💰 Total Earnings for ${date}:`);
+    earnings.forEach(e => {
+      console.log(`   Asset: ${e.asset_address.slice(0, 10)}...`);
+      console.log(`   Earnings: $${e.earnings.toFixed(2)}`);
+      console.log(`   Rate: ${e.asset_rate}`);
+      console.log();
+    });
+  }
+}
+
+async function cmdRewards(args: string[], options: CliOptions): Promise<void> {
+  const client = createClient(options);
+  const date = args[0] || new Date().toISOString().split('T')[0];
+
+  const rewards = await client.getUserRewardsEarnings(date, {
+    order_by: options.orderBy as string,
+    position: options.position as string,
+    no_competition: options.noCompetition,
+  });
+
+  if (options.json) {
+    output(rewards, options);
+  } else {
+    console.log(`🏆 Rewards for ${date}:`);
+    console.log(`   Total markets: ${rewards.length}`);
+
+    const totalEarnings = rewards.reduce((sum, r) => sum + r.earnings, 0);
+    const totalTrades = rewards.reduce((sum, r) => sum + r.trades, 0);
+    const totalVolume = rewards.reduce((sum, r) => sum + r.volume, 0);
+
+    console.log(`   Total earned: $${totalEarnings.toFixed(2)}`);
+    console.log(`   Total trades: ${totalTrades}`);
+    console.log(`   Total volume: $${totalVolume.toFixed(2)}`);
+
+    if (rewards.length > 0) {
+      console.log("\n   Top markets:");
+      rewards.slice(0, 10).forEach((r, i) => {
+        const icon = r.competition ? "🏅" : "📊";
+        console.log(`   ${i + 1}. ${icon} $${r.earnings.toFixed(2)} - ${r.question}`);
+        console.log(`      Trades: ${r.trades} | Volume: $${r.volume.toFixed(2)} | LP: $${r.lp_rewards_earned.toFixed(2)}`);
+      });
+    }
+  }
+}
+
 function cmdHelp(): void {
   console.log(`
-📈 Polylib CLI - Polymarket Trading Tool
+📈 Polypure CLI - Polymarket Trading Tool
 
 Usage: bun cli.ts <command> [args] [options]
 
@@ -536,6 +626,9 @@ Commands:
   balance                  Show USDC balance
   allowance                Update USDC allowance
   trades                   Show trade history
+  earnings [date]          Get user earnings for a date (default: today)
+  total-earnings [date]    Get total user earnings for a date
+  rewards [date]           Get rewards with market details
   series <slug>            Get series by slug
   find <query>             Search for series
   derive                   Derive API key from signer
@@ -551,6 +644,9 @@ Options:
   --price <n>              Order price (0-1)
   --type <type>            Order type: GTC, FOK, IOC (default: GTC)
   --limit, -l <n>          Limit results
+  --order-by <field>       Order rewards by field (volume, earnings, etc.)
+  --position <pos>         Filter rewards by position (maker, taker)
+  --no-competition         Exclude competition rewards
   --proxy <addr>           Gnosis Safe proxy address
   --rpc <url>              Polygon RPC URL
   --funder <addr>          Funder address
@@ -563,6 +659,8 @@ Examples:
   bun cli.ts orderbook 0xabc... --outcome YES -k KEY -s SECRET -p PASS
   bun cli.ts buy 0xabc... -a 100 --price 0.65 -o YES -k KEY -s SECRET -p PASS
   bun cli.ts balance -k KEY -s SECRET -p PASS
+  bun cli.ts earnings 2024-01-15 -k KEY -s SECRET -p PASS
+  bun cli.ts rewards 2024-01-15 --order-by volume -k KEY -s SECRET -p PASS
   bun cli.ts series highest-temperature-in-london-on-february-3-2026
   bun cli.ts find "bitcoin price" -l 5
 `);
@@ -619,6 +717,15 @@ async function main(): Promise<void> {
         break;
       case "derive":
         await cmdDerive(args, options);
+        break;
+      case "earnings":
+        await cmdEarnings(args, options);
+        break;
+      case "total-earnings":
+        await cmdTotalEarnings(args, options);
+        break;
+      case "rewards":
+        await cmdRewards(args, options);
         break;
       case "help":
       default:
