@@ -1,5 +1,4 @@
 import winston from 'winston';
-import DailyRotateFile from 'winston-daily-rotate-file';
 
 // Get log level from environment, default to debug
 const LOG_LEVEL = process.env.LOG_LEVEL || 'debug';
@@ -17,59 +16,13 @@ const consoleTransport = new winston.transports.Console({
   level: 'debug',
 });
 
-// File transport for error logs (always errors)
-const errorFileTransport = new DailyRotateFile({
-  filename: 'logs/error-%DATE%.log',
-  datePattern: 'YYYY-MM-DD',
-  level: 'error',
-  format: jsonFormat,
-  maxSize: '20m',
-  maxFiles: '14d',
-});
-
-// File transport for all logs
-const combinedFileTransport = new DailyRotateFile({
-  filename: 'logs/combined-%DATE%.log',
-  datePattern: 'YYYY-MM-DD',
-  level: LOG_LEVEL,
-  format: jsonFormat,
-  maxSize: '20m',
-  maxFiles: '14d',
-});
-
-// Create logger instance
+// Create logger instance (console only, no file logging)
 export const logger = winston.createLogger({
   level: LOG_LEVEL,
   format: jsonFormat,
   transports: [
     consoleTransport,
-    errorFileTransport,
-    combinedFileTransport,
   ],
-  exitOnError: false, // Don't exit on exceptions, let us handle them
-  // Handle exceptions and rejections
-  exceptionHandlers: [
-    new winston.transports.File({ filename: 'logs/exceptions.log' }),
-  ],
-  rejectionHandlers: [
-    new winston.transports.File({ filename: 'logs/rejections.log' }),
-  ],
-});
-
-// Ensure logs are flushed on process exit
-const flushLogs = () => {
-  logger.flush();
-};
-
-// Hook into process exit to flush logs
-process.on('exit', flushLogs);
-process.on('SIGINT', () => {
-  flushLogs();
-  process.exit(0);
-});
-process.on('SIGTERM', () => {
-  flushLogs();
-  process.exit(0);
 });
 
 // Convenience methods with consistent signature

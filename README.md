@@ -14,7 +14,7 @@ npm install polypure
 
 ## Logging
 
-The SDK uses Winston for structured JSON logging. All logs are written in JSON format for easy parsing and analysis.
+The SDK uses Winston for structured JSON logging. All logs are written to console in JSON format for easy parsing and analysis.
 
 ### Environment Variables
 
@@ -22,15 +22,6 @@ The SDK uses Winston for structured JSON logging. All logs are written in JSON f
 # Set log level (default: debug)
 export LOG_LEVEL=debug  # Options: error, warn, info, debug
 ```
-
-### Log Files
-
-Logs are stored in the `logs/` directory:
-
-- `logs/combined-YYYY-MM-DD.log` - All logs at the configured log level
-- `logs/error-YYYY-MM-DD.log` - Error level logs only
-- `logs/exceptions.log` - Unhandled exceptions
-- `logs/rejections.log` - Unhandled promise rejections
 
 ### Log Format
 
