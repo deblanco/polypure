@@ -1,19 +1,19 @@
 /**
- * Polylib - Polymarket SDK
- * 
+ * Polypure - Polymarket SDK
+ *
  * A thin, zero-dependency (runtime) TypeScript SDK for Polymarket.
  * No logging, no polling, no side effects. You control everything.
- * 
+ *
  * @example
  * ```typescript
- * import { PolymarketClient } from "polylib";
- * 
+ * import { PolymarketClient } from "polypure";
+ *
  * const client = new PolymarketClient({
  *   apiKey: "...",
  *   apiSecret: "...",
  *   apiPassphrase: "..."
  * });
- * 
+ *
  * const market = await client.getMarket("0x...");
  * const orderbook = await client.getOrderbook(market.market_id, "YES");
  * ```

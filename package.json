@@ -7,7 +7,7 @@
   "module": "dist/index.js",
   "type": "module",
   "bin": {
-    "polylib": "./dist/cli.js"
+    "polypure": "./dist/cli.js"
   },
   "scripts": {
     "build": "bun build src/index.ts --outdir dist --target node && bun build src/cli.ts --outdir dist --target node",

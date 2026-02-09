@@ -57,7 +57,7 @@ Polylib includes a full-featured CLI for trading and market discovery from the t
 ```bash
 # Clone and build
 git clone <repo>
-cd polylib
+cd polypure
 bun install
 bun run build
 
