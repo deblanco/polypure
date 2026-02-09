@@ -12,6 +12,66 @@ bun add polypure
 npm install polypure
 ```
 
+## Logging
+
+The SDK uses Winston for structured JSON logging. All logs are written in JSON format for easy parsing and analysis.
+
+### Environment Variables
+
+```bash
+# Set log level (default: debug)
+export LOG_LEVEL=debug  # Options: error, warn, info, debug
+```
+
+### Log Files
+
+Logs are stored in the `logs/` directory:
+
+- `logs/combined-YYYY-MM-DD.log` - All logs at the configured log level
+- `logs/error-YYYY-MM-DD.log` - Error level logs only
+- `logs/exceptions.log` - Unhandled exceptions
+- `logs/rejections.log` - Unhandled promise rejections
+
+### Log Format
+
+All logs are JSON formatted:
+
+```json
+{
+  "level": "info",
+  "message": "CLI command started",
+  "command": "market",
+  "args": ["0x123..."],
+  "timestamp": "2026-02-09T21:00:00.000Z"
+}
+```
+
+### Error Logging
+
+Errors are always logged regardless of the `LOG_LEVEL` setting. When an error occurs, it includes:
+
+```json
+{
+  "level": "error",
+  "message": "Order rejected",
+  "market": "0x123...",
+  "side": "BUY",
+  "error": "Insufficient balance",
+  "timestamp": "2026-02-09T21:00:00.000Z"
+}
+```
+
+### Programmatically Using the Logger
+
+```typescript
+import { log } from "polypure";
+
+log.debug("Debug message", { someData: 123 });
+log.info("Info message", { requestId: "abc-123" });
+log.warn("Warning message", { retryAttempt: 3 });
+log.error("Error occurred", new Error("Something went wrong"));
+```
+
 ## Quick Start
 
 ```typescript

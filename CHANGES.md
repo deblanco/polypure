@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.0] - 2026-02-09
+
+### Added
+- **Winston Logger** - Structured JSON logging throughout the SDK
+  - All logs are JSON formatted for easy parsing
+  - Configurable log level via `LOG_LEVEL` environment variable (default: debug)
+  - Log files: `logs/combined-YYYY-MM-DD.log`, `logs/error-YYYY-MM-DD.log`
+  - Separate files for exceptions and rejections
+  - Error logging is always enabled regardless of log level
+  - Logs rotate daily and are kept for 14 days
+
+### Changed
+- All console operations now use Winston for structured logging
+- HTTP requests are logged with method, URL, and status
+- Order operations (place, cancel) are logged with relevant details
+- Error handling includes full stack traces and context
+- Logs directory structure created with `.gitkeep` file
+
 ## [0.3.0] - 2026-02-09
 
 ### Added

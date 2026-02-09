@@ -1,20 +1,21 @@
 #!/usr/bin/env bun
 /**
  * Polylib CLI - Command-line interface for Polymarket trading
- * 
+ *
  * Usage:
  *   bun cli.ts market <conditionId> --key <apiKey> --secret <secret> --pass <passphrase>
  *   bun cli.ts orderbook <marketId> --outcome YES --key ... --secret ... --pass ...
  *   bun cli.ts buy <marketId> --outcome YES --amount 100 --price 0.65 --key ...
  *   bun cli.ts balance --key ... --secret ... --pass ...
- * 
+ *
  * Environment variables:
  *   POLY_API_KEY, POLY_API_SECRET, POLY_API_PASSPHRASE, POLY_PRIVATE_KEY
  */
 
-import { 
-  PolymarketClient, 
-  getSeries, 
+import { log, logger } from "./logger.js";
+import {
+  PolymarketClient,
+  getSeries,
   searchSeries,
   getBestPrices,
   calculateSpread,
@@ -73,11 +74,11 @@ interface CliOptions {
 function parseArgs(args: string[]): { command: Command; args: string[]; options: CliOptions } {
   const options: CliOptions = {};
   const positional: string[] = [];
-  
+
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     const next = args[i + 1];
-    
+
     switch (arg) {
       case "--key":
       case "-k":
@@ -170,7 +171,7 @@ function parseArgs(args: string[]): { command: Command; args: string[]; options:
         }
     }
   }
-  
+
   const command = (positional[0] || "help") as Command;
   return { command, args: positional.slice(1), options };
 }
@@ -183,14 +184,14 @@ function createClient(options: CliOptions): PolymarketClient {
   const apiKey = options.key || process.env.POLY_API_KEY;
   const apiSecret = options.secret || process.env.POLY_API_SECRET;
   const apiPassphrase = options.pass || options.passphrase || process.env.POLY_API_PASSPHRASE;
-  
+
   if (!apiKey || !apiSecret || !apiPassphrase) {
     throw new Error(
       "Missing API credentials. Provide --key, --secret, --pass or set " +
       "POLY_API_KEY, POLY_API_SECRET, POLY_API_PASSPHRASE env vars"
     );
   }
-  
+
   return new PolymarketClient({
     apiKey,
     apiSecret,
@@ -220,21 +221,21 @@ function formatMarket(market: any): string {
     `   Status: ${market.active ? "🟢 Active" : "🔴 Inactive"} ${market.closed ? "| Closed" : ""}`,
     `   End: ${market.end_date_iso || market.endDate}`,
   ];
-  
+
   if (market.tokens?.length) {
     lines.push("   Outcomes:");
     for (const token of market.tokens) {
       lines.push(`     • ${token.outcome}: $${token.price?.toFixed(3) || "?"}`);
     }
   }
-  
+
   if (market.outcomes?.length) {
     lines.push("   Outcomes:");
     for (const out of market.outcomes) {
       lines.push(`     • ${out.name}: ${out.tokenId?.slice(0, 20)}...`);
     }
   }
-  
+
   return lines.join("\n");
 }
 
@@ -244,7 +245,7 @@ function formatOrderbook(book: any): string {
     ``,
     `   BIDS (Buy):`,
   ];
-  
+
   if (book.bids?.length) {
     for (const bid of book.bids.slice(0, 5)) {
       lines.push(`     ${bid.price.toFixed(3)} × ${bid.size}`);
@@ -252,9 +253,9 @@ function formatOrderbook(book: any): string {
   } else {
     lines.push("     (no bids)");
   }
-  
+
   lines.push("", `   ASKS (Sell):`);
-  
+
   if (book.asks?.length) {
     for (const ask of book.asks.slice(0, 5)) {
       lines.push(`     ${ask.price.toFixed(3)} × ${ask.size}`);
@@ -262,7 +263,7 @@ function formatOrderbook(book: any): string {
   } else {
     lines.push("     (no asks)");
   }
-  
+
   const { bestBid, bestAsk, spread } = getBestPrices(book);
   lines.push(
     "",
@@ -270,7 +271,7 @@ function formatOrderbook(book: any): string {
     `   Best Ask: ${bestAsk?.toFixed(3) || "-"}`,
     `   Spread: ${spread === Infinity ? "-" : spread.toFixed(3)}`
   );
-  
+
   return lines.join("\n");
 }
 
@@ -291,14 +292,14 @@ function formatOrder(order: any): string {
 async function cmdMarket(args: string[], options: CliOptions): Promise<void> {
   const client = createClient(options);
   const conditionId = args[0];
-  
+
   if (!conditionId) {
     console.error("Usage: cli.ts market <conditionId>");
     process.exit(1);
   }
-  
+
   const market = await client.getMarket(conditionId);
-  
+
   if (options.json) {
     output(market, options);
   } else {
@@ -310,7 +311,7 @@ async function cmdMarkets(args: string[], options: CliOptions): Promise<void> {
   const client = createClient(options);
   const markets = await client.getMarkets();
   const limit = options.limit || 20;
-  
+
   if (options.json) {
     output(markets.slice(0, limit), options);
   } else {
@@ -325,14 +326,14 @@ async function cmdMarkets(args: string[], options: CliOptions): Promise<void> {
 async function cmdSearch(args: string[], options: CliOptions): Promise<void> {
   const client = createClient(options);
   const query = args.join(" ");
-  
+
   if (!query) {
     console.error("Usage: cli.ts search <query>");
     process.exit(1);
   }
-  
+
   const markets = await client.searchMarkets(query, options.limit || 10);
-  
+
   if (options.json) {
     output(markets, options);
   } else {
@@ -347,19 +348,19 @@ async function cmdSearch(args: string[], options: CliOptions): Promise<void> {
 async function cmdOrderbook(args: string[], options: CliOptions): Promise<void> {
   const client = createClient(options);
   const marketId = args[0];
-  
+
   if (!marketId) {
     console.error("Usage: cli.ts orderbook <marketId> [--outcome YES]");
     process.exit(1);
   }
-  
+
   let book;
   if (options.tokenId) {
     book = await client.getOrderbookByTokenId(options.tokenId);
   } else {
     book = await client.getOrderbook(marketId, options.outcome || "YES");
   }
-  
+
   if (options.json) {
     output(book, options);
   } else {
@@ -370,12 +371,12 @@ async function cmdOrderbook(args: string[], options: CliOptions): Promise<void> 
 async function cmdPlaceOrder(side: OrderSide, args: string[], options: CliOptions): Promise<void> {
   const client = createClient(options);
   const marketId = args[0];
-  
+
   if (!marketId || !options.amount || !options.price) {
     console.error(`Usage: cli.ts ${side.toLowerCase()} <marketId> --amount <shares> --price <0-1> [--outcome YES]`);
     process.exit(1);
   }
-  
+
   const request: OrderRequest = {
     market: marketId,
     side,
@@ -385,14 +386,14 @@ async function cmdPlaceOrder(side: OrderSide, args: string[], options: CliOption
     price: options.price,
     type: options.type || "GTC",
   };
-  
+
   // Validate and align
   normalizeOrder(request.amount, request.price);
-  
+
   console.log(`Placing ${side} order: ${request.amount} shares @ ${request.price}`);
-  
+
   const result = await client.placeOrder(request);
-  
+
   if (options.json) {
     output(result, options);
   } else {
@@ -403,12 +404,12 @@ async function cmdPlaceOrder(side: OrderSide, args: string[], options: CliOption
 async function cmdCancel(args: string[], options: CliOptions): Promise<void> {
   const client = createClient(options);
   const orderId = args[0];
-  
+
   if (!orderId) {
     console.error("Usage: cli.ts cancel <orderId>");
     process.exit(1);
   }
-  
+
   await client.cancelOrder(orderId);
   console.log(`✓ Cancelled order ${orderId}`);
 }
@@ -416,7 +417,7 @@ async function cmdCancel(args: string[], options: CliOptions): Promise<void> {
 async function cmdOrders(args: string[], options: CliOptions): Promise<void> {
   const client = createClient(options);
   const orders = await client.getOrders();
-  
+
   if (options.json) {
     output(orders, options);
   } else {
@@ -431,7 +432,7 @@ async function cmdOrders(args: string[], options: CliOptions): Promise<void> {
 async function cmdBalance(args: string[], options: CliOptions): Promise<void> {
   const client = createClient(options);
   const balance = await client.getUSDCBalance();
-  
+
   if (options.json) {
     output({ balance, raw: await client.getBalance() }, options);
   } else {
@@ -448,7 +449,7 @@ async function cmdAllowance(args: string[], options: CliOptions): Promise<void> 
 async function cmdTrades(args: string[], options: CliOptions): Promise<void> {
   const client = createClient(options);
   const trades = await client.getTrades();
-  
+
   if (options.json) {
     output(trades, options);
   } else {
@@ -467,19 +468,19 @@ async function cmdTrades(args: string[], options: CliOptions): Promise<void> {
 
 async function cmdSeries(args: string[], options: CliOptions): Promise<void> {
   const slug = args[0];
-  
+
   if (!slug) {
     console.error("Usage: cli.ts series <slug>");
     process.exit(1);
   }
-  
+
   const series = await getSeries(slug);
-  
+
   if (!series) {
     console.error(`Series not found: ${slug}`);
     process.exit(1);
   }
-  
+
   if (options.json) {
     output(series, options);
   } else {
@@ -492,7 +493,7 @@ async function cmdSeries(args: string[], options: CliOptions): Promise<void> {
       "",
       "   Markets:",
     ].join("\n"));
-    
+
     for (const market of series.markets) {
       console.log(`\n${formatMarket(market)}`);
     }
@@ -501,14 +502,14 @@ async function cmdSeries(args: string[], options: CliOptions): Promise<void> {
 
 async function cmdFind(args: string[], options: CliOptions): Promise<void> {
   const query = args.join(" ");
-  
+
   if (!query) {
     console.error("Usage: cli.ts find <query>");
     process.exit(1);
   }
-  
+
   const results = await searchSeries(query, { limit: options.limit || 5 });
-  
+
   if (options.json) {
     output(results, options);
   } else {
@@ -948,7 +949,9 @@ Examples:
 
 async function main(): Promise<void> {
   const { command, args, options } = parseArgs(process.argv.slice(2));
-  
+
+  log.info('CLI command started', { command, args, options });
+
   try {
     switch (command) {
       case "market":
@@ -1029,6 +1032,14 @@ async function main(): Promise<void> {
         cmdHelp();
     }
   } catch (err: any) {
+    log.error('CLI command failed', {
+      command,
+      args,
+      error: err.message,
+      code: err.code,
+      stack: err.stack,
+    });
+
     if (options.json) {
       console.error(JSON.stringify({ error: err.message, code: err.code }, null, 2));
     } else {

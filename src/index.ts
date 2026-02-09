@@ -320,6 +320,12 @@ export const POLYMARKET_WS_URL = "wss://ws-subscriptions-clob.polymarket.com";
 export const GAMMA_API_BASE = "https://gamma-api.polymarket.com";
 
 // ============================================================================
+// Logger
+// ============================================================================
+
+import { log } from "./logger.js";
+
+// ============================================================================
 // Errors
 // ============================================================================
 
@@ -362,8 +368,16 @@ async function httpRequest<T>(
   url: string,
   options: RequestOptions = {}
 ): Promise<T> {
+  const method = options.method || "GET";
+
+  log.debug('HTTP request', {
+    url,
+    method,
+    hasBody: !!options.body,
+  });
+
   const response = await fetch(url, {
-    method: options.method || "GET",
+    method,
     headers: {
       "Content-Type": "application/json",
       ...options.headers,
@@ -373,14 +387,26 @@ async function httpRequest<T>(
 
   if (!response.ok) {
     const text = await response.text();
-    throw new PolymarketError(
-      `HTTP ${response.status}: ${text}`,
-      "HTTP_ERROR",
-      response.status
-    );
+    const error = `HTTP ${response.status}: ${text}`;
+    log.error('HTTP request failed', {
+      url,
+      method,
+      status: response.status,
+      statusText: response.statusText,
+      responseText: text,
+    });
+    throw new PolymarketError(error, "HTTP_ERROR", response.status);
   }
 
-  return response.json() as Promise<T>;
+  const data = await response.json() as Promise<T>;
+
+  log.debug('HTTP request succeeded', {
+    url,
+    method,
+    status: response.status,
+  });
+
+  return data;
 }
 
 // ============================================================================
@@ -418,6 +444,11 @@ export class PolymarketClient {
       options.signatureType,
       options.funderAddress
     );
+
+    log.debug('PolymarketClient initialized', {
+      baseUrl: this.baseUrl,
+      hasSigner: !!this.signer,
+    });
   }
 
   // ========================================================================
@@ -496,20 +527,24 @@ export class PolymarketClient {
    * Get orderbook for a market outcome
    */
   async getOrderbook(marketId: string, outcome: string): Promise<Orderbook> {
+    log.debug('Fetching orderbook', { marketId, outcome });
+
     const market = await this.getMarket(marketId);
-    
+
     const token = market.tokens.find((t) =>
       t.outcome.toUpperCase() === outcome.toUpperCase()
     ) ?? market.tokens[0];
 
     if (!token?.token_id) {
-      throw new ValidationError(`No token found for outcome: ${outcome}`);
+      const error = `No token found for outcome: ${outcome}`;
+      log.error('Orderbook token not found', { marketId, outcome, availableOutcomes: market.tokens.map(t => t.outcome) });
+      throw new ValidationError(error);
     }
 
     const ob = await this.sdk.getOrderBook(token.token_id);
     const hash = await this.sdk.getOrderBookHash(ob);
 
-    return {
+    const orderbook = {
       market: marketId,
       asset_id: token.token_id,
       bids: ob.bids.map((b: any) => ({
@@ -522,16 +557,28 @@ export class PolymarketClient {
       })),
       hash,
     };
+
+    log.debug('Orderbook fetched', {
+      marketId,
+      outcome,
+      assetId: token.token_id,
+      bids: orderbook.bids.length,
+      asks: orderbook.asks.length,
+    });
+
+    return orderbook;
   }
 
   /**
    * Get orderbook by token ID directly
    */
   async getOrderbookByTokenId(tokenId: string): Promise<Orderbook> {
+    log.debug('Fetching orderbook by token ID', { tokenId });
+
     const ob = await this.sdk.getOrderBook(tokenId);
     const hash = await this.sdk.getOrderBookHash(ob);
 
-    return {
+    const orderbook = {
       market: "",
       asset_id: tokenId,
       bids: ob.bids.map((b: any) => ({
@@ -544,6 +591,14 @@ export class PolymarketClient {
       })),
       hash,
     };
+
+    log.debug('Orderbook fetched by token ID', {
+      tokenId,
+      bids: orderbook.bids.length,
+      asks: orderbook.asks.length,
+    });
+
+    return orderbook;
   }
 
   // ========================================================================
@@ -589,32 +644,61 @@ export class PolymarketClient {
       side: request.side === "BUY" ? ClobSide.BUY : ClobSide.SELL,
     };
 
+    log.debug('Placing order', {
+      market: request.market,
+      side: request.side,
+      tokenId,
+      amount: request.amount,
+      price: request.price,
+      type: request.type,
+      outcome: request.outcome,
+    });
+
     const res = await this.sdk.createAndPostOrder(userOrder, {}, orderType as any);
 
     const orderId = (res as any)?.orderID ?? (res as any)?.orderId ?? (res as any)?.id;
     const errorMsg = (res as any)?.errorMsg ?? (res as any)?.error;
 
     if (errorMsg) {
+      log.error('Order rejected', {
+        market: request.market,
+        side: request.side,
+        amount: request.amount,
+        price: request.price,
+        error: errorMsg,
+      });
       throw new PolymarketError(String(errorMsg), "ORDER_REJECTED");
     }
 
     if (!orderId) {
+      log.error('Order response missing ID', { response: res });
       throw new PolymarketError("Order response missing ID", "INVALID_RESPONSE");
     }
 
-    return {
+    const orderResponse = {
       order_id: String(orderId),
       status: (res as any)?.status ?? "PENDING",
       filled_size: parseFloat((res as any)?.filledSize ?? "0"),
       remaining_size: request.amount - parseFloat((res as any)?.filledSize ?? "0"),
     };
+
+    log.info('Order placed', {
+      orderId: orderResponse.order_id,
+      status: orderResponse.status,
+      filledSize: orderResponse.filled_size,
+      remainingSize: orderResponse.remaining_size,
+    });
+
+    return orderResponse;
   }
 
   /**
    * Cancel an order
    */
   async cancelOrder(orderId: string): Promise<void> {
+    log.debug('Cancelling order', { orderId });
     await this.sdk.cancelOrder({ orderID: orderId });
+    log.info('Order cancelled', { orderId });
   }
 
   /**
@@ -1316,4 +1400,11 @@ export function isArbitrage(orderbook: Orderbook, threshold = 0.98): boolean {
 // Version
 // ============================================================================
 
-export const VERSION = "0.3.0";
+export const VERSION = "0.4.0";
+
+// ============================================================================
+// Logger Export
+// ============================================================================
+
+export { log, logger } from "./logger.js";
+export type { Logger } from "winston";
