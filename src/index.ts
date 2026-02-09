@@ -151,6 +151,89 @@ export interface UserRewardsEarning {
   competition?: boolean;
 }
 
+// ============================================================================
+// Position Types
+// ============================================================================
+
+export interface Position {
+  order_id?: string;
+  asset_id: string;
+  side: OrderSide;
+  size: string;
+  price: string;
+  original_size?: string;
+  original_price?: string;
+  filled_size?: string;
+  remaining_size?: string;
+  status: string;
+  outcome: string;
+  condition_id: string;
+  market_question?: string;
+  market_slug?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface PositionSummary {
+  condition_id: string;
+  question: string;
+  market_slug: string;
+  positions: Position[];
+  total_size: number;
+  avg_price: number;
+  side: OrderSide;
+}
+
+export interface PositionsResponse {
+  positions: Position[];
+  summary: PositionSummary[];
+  next_cursor?: string;
+}
+
+// ============================================================================
+// Profile Types
+// ============================================================================
+
+export interface UserProfile {
+  address: string;
+  username?: string;
+  avatar?: string;
+  created_at?: string;
+  stats?: ProfileStats;
+}
+
+export interface ProfileStats {
+  total_trades?: number;
+  total_volume?: number;
+  total_earnings?: number;
+  markets_traded?: number;
+  win_rate?: number;
+  roi?: number;
+}
+
+export interface UserPortfolio {
+  address: string;
+  positions: Position[];
+  total_value: number;
+  total_cost: number;
+  unrealized_pnl: number;
+  markets_count: number;
+}
+
+export interface UserTradesOptions {
+  address?: string;
+  asset_id?: string;
+  market?: string;
+  next_cursor?: string;
+  limit?: number;
+}
+
+export interface UserTradesResponse {
+  trades: Trade[];
+  next_cursor?: string;
+  count?: number;
+}
+
 export interface AuthConfig {
   apiKey: string;
   apiSecret: string;
@@ -335,6 +418,40 @@ export class PolymarketClient {
       options.signatureType,
       options.funderAddress
     );
+  }
+
+  // ========================================================================
+  // HTTP Helpers
+  // ========================================================================
+
+  /**
+   * Build query string from options
+   */
+  private buildQueryString(options?: { next_cursor?: string; limit?: number }): string {
+    if (!options) return "";
+    const params = new URLSearchParams();
+    if (options.next_cursor) params.set("next_cursor", options.next_cursor);
+    if (options.limit) params.set("limit", String(options.limit));
+    const qs = params.toString();
+    return qs ? `?${qs}` : "";
+  }
+
+  /**
+   * Make an authenticated GET request to the CLOB API
+   * Uses the clob-client's internal methods to handle authentication
+   */
+  private async apiGet<T>(endpoint: string): Promise<T> {
+    // Access the protected get method through the sdk instance
+    // @ts-expect-error - accessing protected method
+    return this.sdk.get(endpoint) as Promise<T>;
+  }
+
+  /**
+   * Make an authenticated POST request to the CLOB API
+   */
+  private async apiPost<T>(endpoint: string, body?: unknown): Promise<T> {
+    // @ts-expect-error - accessing protected method
+    return this.sdk.post(endpoint, { body } as any) as Promise<T>;
   }
 
   // ========================================================================
@@ -567,6 +684,7 @@ export class PolymarketClient {
 
   /**
    * Get user earnings for a specific date
+   * Note: This only returns earnings for the authenticated user's profile
    * @param date - Date in YYYY-MM-DD format
    */
   async getUserEarnings(date: string): Promise<UserEarning[]> {
@@ -575,6 +693,7 @@ export class PolymarketClient {
 
   /**
    * Get total user earnings for a specific date
+   * Note: This only returns earnings for the authenticated user's profile
    * @param date - Date in YYYY-MM-DD format
    */
   async getTotalUserEarnings(date: string): Promise<TotalUserEarning[]> {
@@ -583,6 +702,7 @@ export class PolymarketClient {
 
   /**
    * Get user earnings with market details
+   * Note: This only returns earnings for the authenticated user's profile
    * @param date - Date in YYYY-MM-DD format
    * @param options - Optional query parameters
    */
@@ -600,6 +720,365 @@ export class PolymarketClient {
       options?.position,
       options?.no_competition
     );
+  }
+
+  // ========================================================================
+  // Current Positions
+  // ========================================================================
+
+  /**
+   * Get current positions for the authenticated user
+   * This returns all open positions across all markets
+   */
+  async getCurrentPositions(options?: {
+    next_cursor?: string;
+    limit?: number;
+  }): Promise<PositionsResponse> {
+    // Note: Positions API endpoint - returns current open positions
+    // Using a direct implementation since the clob-client SDK may not expose this
+    const response = await this.apiGet<{ positions?: any[]; next_cursor?: string }>(
+      `/positions/me${this.buildQueryString(options)}`
+    );
+
+    const positions = (response.positions ?? []).map((p: any) => this.normalizePosition(p));
+    const summary = this.summarizePositions(positions);
+
+    return {
+      positions,
+      summary,
+      next_cursor: response.next_cursor,
+    };
+  }
+
+  /**
+   * Get current positions for a specific user by wallet address
+   * This allows querying positions for other profiles
+   * @param address - Wallet address to query positions for
+   */
+  async getUserPositions(
+    address: string,
+    options?: {
+      next_cursor?: string;
+      limit?: number;
+    }
+  ): Promise<PositionsResponse> {
+    const params: Record<string, string> = { address };
+    if (options?.next_cursor) params.next_cursor = options.next_cursor;
+    if (options?.limit) params.limit = String(options.limit);
+
+    const response = await this.apiGet<{ positions?: any[]; next_cursor?: string }>(
+      `/positions?${new URLSearchParams(params)}`
+    );
+
+    const positions = (response.positions ?? []).map((p: any) => this.normalizePosition(p));
+    const summary = this.summarizePositions(positions);
+
+    return {
+      positions,
+      summary,
+      next_cursor: response.next_cursor,
+    };
+  }
+
+  /**
+   * Get positions for a specific market
+   * @param conditionId - Market condition ID
+   * @param address - Optional wallet address (defaults to authenticated user)
+   */
+  async getMarketPositions(
+    conditionId: string,
+    address?: string,
+    options?: {
+      next_cursor?: string;
+      limit?: number;
+    }
+  ): Promise<PositionsResponse> {
+    const params: Record<string, string> = { market: conditionId };
+    if (address) params.address = address;
+    if (options?.next_cursor) params.next_cursor = options.next_cursor;
+    if (options?.limit) params.limit = String(options.limit);
+
+    const response = await this.apiGet<{ positions?: any[]; next_cursor?: string }>(
+      `/positions?${new URLSearchParams(params)}`
+    );
+
+    const positions = (response.positions ?? []).map((p: any) => this.normalizePosition(p));
+    const summary = this.summarizePositions(positions);
+
+    return {
+      positions,
+      summary,
+      next_cursor: response.next_cursor,
+    };
+  }
+
+  /**
+   * Get all positions (paginated)
+   * Fetches all pages of positions automatically
+   */
+  async getAllPositions(address?: string): Promise<Position[]> {
+    const allPositions: Position[] = [];
+    let nextCursor: string | undefined;
+
+    do {
+      const response = address
+        ? await this.getUserPositions(address, { next_cursor: nextCursor, limit: 100 })
+        : await this.getCurrentPositions({ next_cursor: nextCursor, limit: 100 });
+
+      allPositions.push(...response.positions);
+      nextCursor = response.next_cursor;
+    } while (nextCursor);
+
+    return allPositions;
+  }
+
+  // ========================================================================
+  // Profile Querying
+  // ========================================================================
+
+  /**
+   * Get profile information for a wallet address
+   * This allows querying other user's profiles
+   * @param address - Wallet address to query
+   */
+  async getProfile(address: string): Promise<UserProfile> {
+    // Try to get profile data via API
+    try {
+      const response = await this.apiGet<{ address?: string; username?: string; avatar?: string; created_at?: string }>(
+        `/profile/${address}`
+      );
+
+      return {
+        address: response.address || address,
+        username: response.username,
+        avatar: response.avatar,
+        created_at: response.created_at,
+      };
+    } catch {
+      // If profile endpoint is not available, return minimal profile
+      return {
+        address,
+      };
+    }
+  }
+
+  /**
+   * Get portfolio summary for a wallet address
+   * @param address - Wallet address to query (defaults to authenticated user if not provided)
+   */
+  async getPortfolio(address?: string): Promise<UserPortfolio> {
+    const targetAddress = address || await this.getSignerAddress();
+    const positions = await this.getUserPositions(targetAddress);
+
+    let totalCost = 0;
+    let totalValue = 0;
+
+    for (const pos of positions.positions) {
+      const size = parseFloat(pos.size);
+      const price = parseFloat(pos.price);
+      const cost = size * price;
+
+      // Estimate current value using current market prices
+      let currentValue = cost;
+      try {
+        const orderbook = await this.getOrderbookByTokenId(pos.asset_id);
+        const bestPrices = getBestPrices(orderbook);
+        const currentPrice = pos.side === "BUY"
+          ? (bestPrices.bestAsk || price)
+          : (bestPrices.bestBid || price);
+        currentValue = size * currentPrice;
+      } catch {
+        // If we can't get orderbook, use original price
+      }
+
+      totalCost += cost;
+      totalValue += currentValue;
+    }
+
+    return {
+      address: targetAddress,
+      positions: positions.positions,
+      total_value: totalValue,
+      total_cost: totalCost,
+      unrealized_pnl: totalValue - totalCost,
+      markets_count: positions.summary.length,
+    };
+  }
+
+  /**
+   * Get trades for a specific user address
+   * @param options - Optional filters and pagination
+   */
+  async getUserTrades(options?: UserTradesOptions): Promise<UserTradesResponse> {
+    const params: { maker_address?: string; asset_id?: string; market?: string } = {};
+    if (options?.address) params.maker_address = options.address;
+    if (options?.asset_id) params.asset_id = options.asset_id;
+    if (options?.market) params.market = options.market;
+
+    const response = await this.sdk.getTrades(params);
+    const trades = (response as any)?.data ?? (response as any)?.trades ?? response ?? [];
+
+    return {
+      trades,
+      next_cursor: (response as any)?.next_cursor,
+      count: (response as any)?.count,
+    };
+  }
+
+  /**
+   * Get all trades for a user address (paginated)
+   * Fetches all pages automatically
+   * @param address - Wallet address to query
+   */
+  async getAllUserTrades(address: string): Promise<Trade[]> {
+    const allTrades: Trade[] = [];
+    let nextCursor: string | undefined;
+
+    do {
+      const response = await this.sdk.getTradesPaginated(
+        { maker_address: address },
+        nextCursor
+      );
+      allTrades.push(...response.trades);
+      nextCursor = response.next_cursor;
+    } while (nextCursor);
+
+    return allTrades;
+  }
+
+  /**
+   * Get profile stats from trades
+   * Calculates statistics based on historical trade data
+   * @param address - Wallet address to analyze
+   */
+  async getProfileStats(address: string): Promise<ProfileStats> {
+    const trades = await this.getAllUserTrades(address);
+
+    const totalTrades = trades.length;
+    const totalVolume = trades.reduce((sum, t) => sum + parseFloat(t.size) * parseFloat(t.price), 0);
+
+    // Calculate earnings from filled trades
+    const buyTrades = trades.filter(t => t.side === "BUY");
+    const sellTrades = trades.filter(t => t.side === "SELL");
+
+    const buyVolume = buyTrades.reduce((sum, t) => sum + parseFloat(t.size) * parseFloat(t.price), 0);
+    const sellVolume = sellTrades.reduce((sum, t) => sum + parseFloat(t.size) * parseFloat(t.price), 0);
+
+    const totalEarnings = sellVolume - buyVolume;
+
+    const uniqueMarkets = new Set(trades.map(t => t.market));
+    const marketsTraded = uniqueMarkets.size;
+
+    // Calculate win rate (markets where sell price > buy price)
+    const marketProfits = new Map<string, { buys: number; sells: number }>();
+
+    for (const trade of trades) {
+      if (!marketProfits.has(trade.market)) {
+        marketProfits.set(trade.market, { buys: 0, sells: 0 });
+      }
+      const market = marketProfits.get(trade.market)!;
+      const value = parseFloat(trade.size) * parseFloat(trade.price);
+      if (trade.side === "BUY") {
+        market.buys += value;
+      } else {
+        market.sells += value;
+      }
+    }
+
+    let winningMarkets = 0;
+    for (const profits of marketProfits.values()) {
+      if (profits.sells > profits.buys) {
+        winningMarkets++;
+      }
+    }
+
+    const winRate = marketsTraded > 0 ? (winningMarkets / marketsTraded) * 100 : 0;
+
+    // Calculate ROI
+    const roi = buyVolume > 0 ? ((totalEarnings / buyVolume) * 100) : 0;
+
+    return {
+      total_trades: totalTrades,
+      total_volume: totalVolume,
+      total_earnings: totalEarnings,
+      markets_traded: marketsTraded,
+      win_rate: winRate,
+      roi,
+    };
+  }
+
+  // ========================================================================
+  // Helper Methods
+  // ========================================================================
+
+  /**
+   * Normalize position data to consistent format
+   */
+  private normalizePosition(pos: any): Position {
+    return {
+      order_id: pos.order_id || pos.orderID,
+      asset_id: pos.asset_id || pos.tokenID || pos.tokenId,
+      side: (pos.side as OrderSide) || "BUY",
+      size: pos.size || "0",
+      price: pos.price || "0",
+      original_size: pos.original_size || pos.originalSize,
+      original_price: pos.original_price || pos.originalPrice,
+      filled_size: pos.filled_size || pos.filledSize,
+      remaining_size: pos.remaining_size || pos.remainingSize,
+      status: pos.status || "OPEN",
+      outcome: pos.outcome || "",
+      condition_id: pos.condition_id || pos.market || "",
+      market_question: pos.market_question || pos.question,
+      market_slug: pos.market_slug || pos.slug,
+      created_at: pos.created_at || pos.createdAt || new Date().toISOString(),
+      updated_at: pos.updated_at || pos.updatedAt,
+    };
+  }
+
+  /**
+   * Summarize positions by market
+   */
+  private summarizePositions(positions: Position[]): PositionSummary[] {
+    const marketMap = new Map<string, Position[]>();
+
+    for (const pos of positions) {
+      const key = pos.condition_id;
+      if (!marketMap.has(key)) {
+        marketMap.set(key, []);
+      }
+      marketMap.get(key)!.push(pos);
+    }
+
+    const summaries: PositionSummary[] = [];
+
+    for (const [conditionId, marketPositions] of marketMap) {
+      const firstPos = marketPositions[0];
+      const side = firstPos.side;
+      const totalSize = marketPositions.reduce((sum, p) => sum + parseFloat(p.size), 0);
+      const avgPrice = marketPositions.reduce((sum, p) => sum + parseFloat(p.price) * parseFloat(p.size), 0) / totalSize;
+
+      summaries.push({
+        condition_id: conditionId,
+        question: firstPos.market_question || "",
+        market_slug: firstPos.market_slug || "",
+        positions: marketPositions,
+        total_size: totalSize,
+        avg_price: avgPrice,
+        side,
+      });
+    }
+
+    return summaries;
+  }
+
+  /**
+   * Get the signer's wallet address
+   */
+  private async getSignerAddress(): Promise<string> {
+    if (this.signer) {
+      return await this.signer.getAddress();
+    }
+    throw new PolymarketError("Signer required for default address", "NO_SIGNER");
   }
 
   // ========================================================================
@@ -837,4 +1316,4 @@ export function isArbitrage(orderbook: Orderbook, threshold = 0.98): boolean {
 // Version
 // ============================================================================
 
-export const VERSION = "0.2.0";
+export const VERSION = "0.3.0";

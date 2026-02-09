@@ -40,6 +40,8 @@ console.log(book.bids[0]);  // { price: 0.65, size: 1000 }
 - [Orderbooks](#orderbooks)
 - [Orders](#orders)
 - [Trades & Balances](#trades--balances)
+- [Positions](#positions)
+- [Profiles & Portfolios](#profiles--portfolios)
 - [Profile & Earnings](#profile--earnings)
 - [Market Discovery](#market-discovery)
 - [Order Utilities](#order-utilities)
@@ -177,12 +179,61 @@ bun cli.ts rewards 2024-01-15 --no-competition
 bun cli.ts rewards 2024-01-15 --json | jq '[.[] | {question, earnings, volume}]'
 ```
 
+#### Positions (Auth Required)
+
+```bash
+# Get your current positions
+bun cli.ts positions
+
+# Get positions for another wallet
+bun cli.ts user-positions 0xabc123...
+
+# Get positions in a specific market
+bun cli.ts market-positions 0xabc123...
+
+# Get positions for a specific user in a market
+bun cli.ts market-positions 0xabc123... --address 0xdef456...
+
+# Limit results
+bun cli.ts positions -l 10
+bun cli.ts user-positions 0xabc123... -l 20
+
+# JSON output
+bun cli.ts positions --json | jq '.summary[] | {question, total_size, avg_price}'
+```
+
+#### Portfolio & Profiles (Auth Required)
+
+```bash
+# Get your portfolio summary
+bun cli.ts portfolio
+
+# Get portfolio for another user
+bun cli.ts portfolio --address 0xabc123...
+
+# Get profile information for a user
+bun cli.ts profile 0xabc123...
+
+# Get calculated stats from trades
+bun cli.ts profile-stats 0xabc123...
+
+# Get trades for a user
+bun cli.ts user-trades 0xabc123...
+
+# Limit trades returned
+bun cli.ts user-trades 0xabc123... -l 50
+
+# JSON output for analysis
+bun cli.ts portfolio --json | jq '{value: .total_value, pnl: .unrealized_pnl, markets: .markets_count}'
+bun cli.ts profile-stats 0xabc123... --json | jq '{win_rate, roi, total_earnings}'
+```
+
 ### CLI Options
 
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--key` | `-k` | API key |
-| `--secret` | `-s` | API secret |
+| `----secret` | `-s` | API secret |
 | `--pass` | `-p` | API passphrase |
 | `--outcome` | `-o` | Outcome name (YES, NO, etc.) |
 | `--tokenId` | `-t` | Token ID (alternative to outcome) |
@@ -193,6 +244,7 @@ bun cli.ts rewards 2024-01-15 --json | jq '[.[] | {question, earnings, volume}]'
 | `--order-by` | | Order rewards by field (volume, earnings, etc.) |
 | `--position` | | Filter rewards by position (maker, taker) |
 | `--no-competition` | | Exclude competition rewards |
+| `--address` | | Wallet address for profile queries |
 | `--proxy` | | Gnosis Safe proxy address |
 | `--rpc` | | Polygon RPC URL |
 | `--funder` | | Funder address |
@@ -237,6 +289,26 @@ bun cli.ts orderbook 0xabc... -o YES --json | jq '{bestBid: .bids[0], bestAsk: .
 # Extract token IDs for automated trading
 bun cli.ts series my-series-slug --json | \
   jq -r '.markets[].outcomes[] | "\(.name): \(.tokenId)"'
+```
+
+**Profile Analysis Workflow:**
+
+```bash
+# 1. Look up a user's portfolio
+bun cli.ts portfolio 0xabc123... -k KEY -s SECRET -p PASS
+
+# 2. Check their current positions
+bun cli.ts user-positions 0xabc123... -k KEY -s SECRET -p PASS
+
+# 3. Get their trading stats
+bun cli.ts profile-stats 0xabc123... -k KEY -s SECRET -p PASS
+
+# 4. Analyze their recent trades
+bun cli.ts user-trades 0xabc123... -l 50 -k KEY -s SECRET -p PASS
+
+# 5. Export to JSON for custom analysis
+bun cli.ts portfolio 0xabc123... --json -k KEY -s SECRET -p PASS | \
+  jq '{value: .total_value, pnl: .unrealized_pnl, roi: (.unrealized_pnl / .total_cost * 100)}'
 ```
 
 ---
@@ -504,6 +576,213 @@ interface Trade {
   transaction_hash: string;
   trader_side: "TAKER" | "MAKER";
   match_time: string;
+}
+```
+
+---
+
+## Positions
+
+Query current trading positions for yourself or other users.
+
+### Get Your Current Positions
+
+```typescript
+// Get all current positions
+const positions = await client.getCurrentPositions();
+
+console.log(`Total positions: ${positions.positions.length}`);
+console.log(`Markets with positions: ${positions.summary.length}`);
+
+for (const summary of positions.summary) {
+  console.log(`${summary.question}: ${summary.side} ${summary.total_size} @ ${summary.avg_price}`);
+}
+```
+
+### Get Positions for Another User
+
+```typescript
+// Get positions for a specific wallet address
+const userPositions = await client.getUserPositions("0xabc123...");
+
+console.log(`Positions for user: ${userPositions.positions.length}`);
+```
+
+### Get Positions for a Specific Market
+
+```typescript
+// Get your positions in a specific market
+const marketPositions = await client.getMarketPositions("0xabc123...");
+
+// Get another user's positions in a market
+const userMarketPositions = await client.getMarketPositions(
+  "0xabc123...",
+  "0xdef456..." // optional address
+);
+```
+
+### Get All Positions (Paginated)
+
+```typescript
+// Fetch all positions automatically (handles pagination)
+const allPositions = await client.getAllPositions();
+const allUserPositions = await client.getAllPositions("0xabc123...");
+```
+
+### Position Interfaces
+
+```typescript
+interface Position {
+  order_id?: string;
+  asset_id: string;
+  side: "BUY" | "SELL";
+  size: string;
+  price: string;
+  original_size?: string;
+  original_price?: string;
+  filled_size?: string;
+  remaining_size?: string;
+  status: string;
+  outcome: string;
+  condition_id: string;
+  market_question?: string;
+  market_slug?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+interface PositionSummary {
+  condition_id: string;
+  question: string;
+  market_slug: string;
+  positions: Position[];
+  total_size: number;
+  avg_price: number;
+  side: "BUY" | "SELL";
+}
+
+interface PositionsResponse {
+  positions: Position[];
+  summary: PositionSummary[];
+  next_cursor?: string;
+}
+```
+
+---
+
+## Profiles & Portfolios
+
+Query profiles, portfolios, and statistics for any wallet address.
+
+### Get User Profile
+
+```typescript
+// Get profile information for any wallet address
+const profile = await client.getProfile("0xabc123...");
+
+console.log(`Username: ${profile.username}`);
+console.log(`Avatar: ${profile.avatar}`);
+console.log(`Created: ${profile.created_at}`);
+
+if (profile.stats) {
+  console.log(`Trades: ${profile.stats.total_trades}`);
+  console.log(`Volume: $${profile.stats.total_volume}`);
+  console.log(`Earnings: $${profile.stats.total_earnings}`);
+}
+```
+
+### Get Portfolio Summary
+
+```typescript
+// Get your portfolio
+const myPortfolio = await client.getPortfolio();
+
+// Get another user's portfolio
+const userPortfolio = await client.getPortfolio("0xabc123...");
+
+console.log(`Total Value: $${myPortfolio.total_value}`);
+console.log(`Total Cost: $${myPortfolio.total_cost}`);
+console.log(`Unrealized P/L: $${myPortfolio.unrealized_pnl}`);
+console.log(`Markets: ${myPortfolio.markets_count}`);
+```
+
+### Get Trades for a User
+
+```typescript
+// Get trades for a user
+const tradesResponse = await client.getUserTrades({
+  address: "0xabc123...",
+  limit: 20,
+  next_cursor: undefined,
+});
+
+console.log(`Trades: ${tradesResponse.trades.length}`);
+console.log(`Next cursor: ${tradesResponse.next_cursor}`);
+```
+
+### Get All Trades for a User
+
+```typescript
+// Automatically fetch all pages of trades
+const allTrades = await client.getAllUserTrades("0xabc123...");
+console.log(`Total trades: ${allTrades.length}`);
+```
+
+### Get Profile Statistics
+
+```typescript
+// Calculate stats from historical trade data
+const stats = await client.getProfileStats("0xabc123...");
+
+console.log(`Total Trades: ${stats.total_trades}`);
+console.log(`Total Volume: $${stats.total_volume}`);
+console.log(`Total Earnings: $${stats.total_earnings}`);
+console.log(`Markets Traded: ${stats.markets_traded}`);
+console.log(`Win Rate: ${stats.win_rate}%`);
+console.log(`ROI: ${stats.roi}%`);
+```
+
+### Profile & Portfolio Interfaces
+
+```typescript
+interface UserProfile {
+  address: string;
+  username?: string;
+  avatar?: string;
+  created_at?: string;
+  stats?: ProfileStats;
+}
+
+interface ProfileStats {
+  total_trades?: number;
+  total_volume?: number;
+  total_earnings?: number;
+  markets_traded?: number;
+  win_rate?: number;
+  roi?: number;
+}
+
+interface UserPortfolio {
+  address: string;
+  positions: Position[];
+  total_value: number;
+  total_cost: number;
+  unrealized_pnl: number;
+  markets_count: number;
+}
+
+interface UserTradesOptions {
+  address?: string;
+  asset_id?: string;
+  market?: string;
+  next_cursor?: string;
+  limit?: number;
+}
+
+interface UserTradesResponse {
+  trades: Trade[];
+  next_cursor?: string;
+  count?: number;
 }
 ```
 
@@ -786,6 +1065,18 @@ import type {
   OrderStatus,
   Trade,
   BalanceAllowance,
+
+  // Positions
+  Position,
+  PositionSummary,
+  PositionsResponse,
+
+  // Profiles & Portfolios
+  UserProfile,
+  ProfileStats,
+  UserPortfolio,
+  UserTradesOptions,
+  UserTradesResponse,
 
   // Profile & Earnings
   UserEarning,

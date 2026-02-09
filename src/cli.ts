@@ -37,6 +37,9 @@ type Command =
   | "balance" | "allowance"
   | "trades"
   | "earnings" | "total-earnings" | "rewards"
+  | "positions" | "user-positions" | "market-positions"
+  | "portfolio" | "profile" | "profile-stats"
+  | "user-trades"
   | "series" | "find"
   | "derive"
   | "help";
@@ -55,6 +58,7 @@ interface CliOptions {
   orderBy?: string;
   position?: string;
   noCompetition?: boolean;
+  address?: string;
   proxy?: string;
   rpc?: string;
   funder?: string;
@@ -131,6 +135,10 @@ function parseArgs(args: string[]): { command: Command; args: string[]; options:
         break;
       case "--no-competition":
         options.noCompetition = true;
+        break;
+      case "--address":
+        options.address = next;
+        i++;
         break;
       case "--proxy":
         options.proxy = next;
@@ -608,6 +616,239 @@ async function cmdRewards(args: string[], options: CliOptions): Promise<void> {
   }
 }
 
+// ============================================================================
+// Positions Commands
+// ============================================================================
+
+async function cmdPositions(args: string[], options: CliOptions): Promise<void> {
+  const client = createClient(options);
+  const positions = await client.getCurrentPositions({
+    next_cursor: undefined,
+    limit: options.limit,
+  });
+
+  if (options.json) {
+    output(positions, options);
+  } else {
+    console.log(`📦 Your Current Positions (${positions.positions.length} total):`);
+
+    if (positions.summary.length === 0) {
+      console.log("   No open positions");
+      return;
+    }
+
+    for (const summary of positions.summary) {
+      console.log(`\n   📊 ${summary.question.substring(0, 80)}...`);
+      console.log(`   ${summary.side} ${summary.total_size.toFixed(2)} @ ${summary.avg_price.toFixed(3)}`);
+      console.log(`   Positions: ${summary.positions.length}`);
+
+      for (const pos of summary.positions) {
+        const icon = pos.side === "BUY" ? "🟢" : "🔴";
+        console.log(`     ${icon} ${pos.outcome}: ${pos.size} @ ${pos.price}`);
+      }
+    }
+  }
+}
+
+async function cmdUserPositions(args: string[], options: CliOptions): Promise<void> {
+  const client = createClient(options);
+  const address = options.address || args[0];
+
+  if (!address) {
+    console.error("Usage: cli.ts user-positions <address> --key ... --secret ... --pass ...");
+    console.error("   or: cli.ts user-positions --address 0xabc... --key ...");
+    process.exit(1);
+  }
+
+  const positions = await client.getUserPositions(address, {
+    next_cursor: undefined,
+    limit: options.limit,
+  });
+
+  if (options.json) {
+    output(positions, options);
+  } else {
+    console.log(`📦 Positions for ${address} (${positions.positions.length} total):`);
+
+    if (positions.summary.length === 0) {
+      console.log("   No open positions");
+      return;
+    }
+
+    for (const summary of positions.summary) {
+      console.log(`\n   📊 ${summary.question.substring(0, 80)}...`);
+      console.log(`   ${summary.side} ${summary.total_size.toFixed(2)} @ ${summary.avg_price.toFixed(3)}`);
+    }
+  }
+}
+
+async function cmdMarketPositions(args: string[], options: CliOptions): Promise<void> {
+  const client = createClient(options);
+  const conditionId = args[0];
+
+  if (!conditionId) {
+    console.error("Usage: cli.ts market-positions <conditionId> [--address 0xabc...]");
+    process.exit(1);
+  }
+
+  const positions = await client.getMarketPositions(
+    conditionId,
+    options.address,
+    {
+      next_cursor: undefined,
+      limit: options.limit,
+    }
+  );
+
+  if (options.json) {
+    output(positions, options);
+  } else {
+    const target = options.address ? ` for ${options.address}` : " (your positions)";
+    console.log(`📦 Market positions${target} (${positions.positions.length} total):`);
+
+    if (positions.summary.length === 0) {
+      console.log("   No positions in this market");
+      return;
+    }
+
+    for (const summary of positions.summary) {
+      console.log(`\n   ${summary.side} ${summary.total_size.toFixed(2)} @ ${summary.avg_price.toFixed(3)}`);
+
+      for (const pos of summary.positions) {
+        const icon = pos.side === "BUY" ? "🟢" : "🔴";
+        console.log(`     ${icon} ${pos.outcome}: ${pos.size} @ ${pos.price}`);
+      }
+    }
+  }
+}
+
+// ============================================================================
+// Portfolio & Profile Commands
+// ============================================================================
+
+async function cmdPortfolio(args: string[], options: CliOptions): Promise<void> {
+  const client = createClient(options);
+  const portfolio = await client.getPortfolio(options.address);
+
+  if (options.json) {
+    output(portfolio, options);
+  } else {
+    const target = options.address || "You";
+    const pnlIcon = portfolio.unrealized_pnl >= 0 ? "📈" : "📉";
+
+    console.log(`💼 Portfolio for ${target}`);
+    console.log(`   Address: ${portfolio.address}`);
+    console.log(`   Total Value: $${portfolio.total_value.toFixed(2)}`);
+    console.log(`   Total Cost: $${portfolio.total_cost.toFixed(2)}`);
+    console.log(`   ${pnlIcon} Unrealized P/L: $${portfolio.unrealized_pnl.toFixed(2)} (${portfolio.total_cost > 0 ? ((portfolio.unrealized_pnl / portfolio.total_cost) * 100).toFixed(2) : 0}%)`);
+    console.log(`   Markets: ${portfolio.markets_count}`);
+
+    if (portfolio.positions.length > 0 && !options.json) {
+      console.log("\n   Top positions:");
+      portfolio.positions
+        .slice(0, 10)
+        .forEach((pos, i) => {
+          const value = parseFloat(pos.size) * parseFloat(pos.price);
+          console.log(`   ${i + 1}. ${pos.market_question?.substring(0, 60)}...`);
+          console.log(`      ${pos.side} ${pos.size} @ ${pos.price} ($${value.toFixed(2)})`);
+        });
+    }
+  }
+}
+
+async function cmdProfile(args: string[], options: CliOptions): Promise<void> {
+  const client = createClient(options);
+  const address = args[0] || options.address;
+
+  if (!address) {
+    console.error("Usage: cli.ts profile <address> --key ... --secret ... --pass ...");
+    console.error("   or: cli.ts profile --address 0xabc... --key ...");
+    process.exit(1);
+  }
+
+  const profile = await client.getProfile(address);
+
+  if (options.json) {
+    output(profile, options);
+  } else {
+    console.log(`👤 Profile: ${address.substring(0, 8)}...${address.substring(38)}`);
+    if (profile.username) console.log(`   Username: ${profile.username}`);
+    if (profile.avatar) console.log(`   Avatar: ${profile.avatar}`);
+    if (profile.created_at) console.log(`   Joined: ${profile.created_at}`);
+
+    if (profile.stats) {
+      console.log(`\n   📊 Stats:`);
+      console.log(`   Trades: ${profile.stats.total_trades ?? 0}`);
+      console.log(`   Volume: $${(profile.stats.total_volume ?? 0).toFixed(2)}`);
+      console.log(`   Earnings: $${(profile.stats.total_earnings ?? 0).toFixed(2)}`);
+      console.log(`   Markets: ${profile.stats.markets_traded ?? 0}`);
+      console.log(`   Win Rate: ${(profile.stats.win_rate ?? 0).toFixed(1)}%`);
+      console.log(`   ROI: ${(profile.stats.roi ?? 0).toFixed(2)}%`);
+    }
+  }
+}
+
+async function cmdProfileStats(args: string[], options: CliOptions): Promise<void> {
+  const client = createClient(options);
+  const address = args[0] || options.address;
+
+  if (!address) {
+    console.error("Usage: cli.ts profile-stats <address> --key ... --secret ... --pass ...");
+    console.error("   or: cli.ts profile-stats --address 0xabc... --key ...");
+    process.exit(1);
+  }
+
+  const stats = await client.getProfileStats(address);
+
+  if (options.json) {
+    output(stats, options);
+  } else {
+    console.log(`📊 Stats for ${address.substring(0, 8)}...${address.substring(38)}:`);
+    console.log(`   Total Trades: ${stats.total_trades}`);
+    console.log(`   Total Volume: $${stats.total_volume.toFixed(2)}`);
+    console.log(`   Total Earnings: $${stats.total_earnings.toFixed(2)}`);
+    console.log(`   Markets Traded: ${stats.markets_traded}`);
+    console.log(`   Win Rate: ${stats.win_rate.toFixed(1)}%`);
+    console.log(`   ROI: ${stats.roi.toFixed(2)}%`);
+  }
+}
+
+async function cmdUserTrades(args: string[], options: CliOptions): Promise<void> {
+  const client = createClient(options);
+  const address = options.address || args[0];
+
+  if (!address) {
+    console.error("Usage: cli.ts user-trades <address> --key ... --secret ... --pass ...");
+    console.error("   or: cli.ts user-trades --address 0xabc... --key ...");
+    process.exit(1);
+  }
+
+  const trades = await client.getUserTrades({
+    address,
+    limit: options.limit || 20,
+  });
+
+  if (options.json) {
+    output(trades, options);
+  } else {
+    console.log(`📜 Trades for ${address.substring(0, 8)}...${address.substring(38)} (${trades.trades.length} shown):`);
+
+    if (trades.trades.length === 0) {
+      console.log("   No trades found");
+      return;
+    }
+
+    for (const trade of trades.trades) {
+      const icon = trade.side === "BUY" ? "🟢" : "🔴";
+      const date = new Date(trade.match_time).toLocaleDateString();
+      console.log(`\n   ${icon} ${trade.question || trade.market}`);
+      console.log(`      ${trade.side} ${trade.size} @ ${trade.price}`);
+      console.log(`      Date: ${date}`);
+      console.log(`      Side: ${trade.trader_side}`);
+    }
+  }
+}
+
 function cmdHelp(): void {
   console.log(`
 📈 Polypure CLI - Polymarket Trading Tool
@@ -629,9 +870,23 @@ Commands:
   earnings [date]          Get user earnings for a date (default: today)
   total-earnings [date]    Get total user earnings for a date
   rewards [date]           Get rewards with market details
+
+  Positions:
+  positions                Show your current positions
+  user-positions <addr>    Show positions for a wallet address
+  market-positions <id>    Show positions in a market [--address]
+
+  Profile:
+  portfolio [--address]    Show portfolio summary
+  profile <address>        Get profile information
+  profile-stats <address>  Calculate stats from trades
+  user-trades <address>    Get trades for a wallet address
+
+  Discovery:
   series <slug>            Get series by slug
   find <query>             Search for series
   derive                   Derive API key from signer
+
   help                     Show this help
 
 Options:
@@ -647,6 +902,7 @@ Options:
   --order-by <field>       Order rewards by field (volume, earnings, etc.)
   --position <pos>         Filter rewards by position (maker, taker)
   --no-competition         Exclude competition rewards
+  --address <addr>         Wallet address for profile queries
   --proxy <addr>           Gnosis Safe proxy address
   --rpc <url>              Polygon RPC URL
   --funder <addr>          Funder address
@@ -655,12 +911,32 @@ Options:
   --help, -h               Show help
 
 Examples:
+  # Market data
   bun cli.ts market 0xabc123... -k KEY -s SECRET -p PASS
   bun cli.ts orderbook 0xabc... --outcome YES -k KEY -s SECRET -p PASS
+
+  # Trading
   bun cli.ts buy 0xabc... -a 100 --price 0.65 -o YES -k KEY -s SECRET -p PASS
+  bun cli.ts sell 0xabc... -a 50 --price 0.70 -o YES -k KEY -s SECRET -p PASS
+  bun cli.ts cancel 0xorder... -k KEY -s SECRET -p PASS
+
+  # Account
   bun cli.ts balance -k KEY -s SECRET -p PASS
+  bun cli.ts positions -k KEY -s SECRET -p PASS
+  bun cli.ts portfolio -k KEY -s SECRET -p PASS
+
+  # Other profiles
+  bun cli.ts user-positions 0xabc123... -k KEY -s SECRET -p PASS
+  bun cli.ts profile 0xabc123... -k KEY -s SECRET -p PASS
+  bun cli.ts profile-stats 0xabc123... -k KEY -s SECRET -p PASS
+  bun cli.ts user-trades 0xabc123... -l 20 -k KEY -s SECRET -p PASS
+  bun cli.ts portfolio --address 0xabc123... -k KEY -s SECRET -p PASS
+
+  # Earnings
   bun cli.ts earnings 2024-01-15 -k KEY -s SECRET -p PASS
   bun cli.ts rewards 2024-01-15 --order-by volume -k KEY -s SECRET -p PASS
+
+  # Discovery
   bun cli.ts series highest-temperature-in-london-on-february-3-2026
   bun cli.ts find "bitcoin price" -l 5
 `);
@@ -726,6 +1002,27 @@ async function main(): Promise<void> {
         break;
       case "rewards":
         await cmdRewards(args, options);
+        break;
+      case "positions":
+        await cmdPositions(args, options);
+        break;
+      case "user-positions":
+        await cmdUserPositions(args, options);
+        break;
+      case "market-positions":
+        await cmdMarketPositions(args, options);
+        break;
+      case "portfolio":
+        await cmdPortfolio(args, options);
+        break;
+      case "profile":
+        await cmdProfile(args, options);
+        break;
+      case "profile-stats":
+        await cmdProfileStats(args, options);
+        break;
+      case "user-trades":
+        await cmdUserTrades(args, options);
         break;
       case "help":
       default:
