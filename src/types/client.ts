@@ -29,11 +29,14 @@ export interface PrivateKeyConfig {
 /**
  * Internal client options used after credential derivation.
  * Not part of the public API.
+ *
+ * All credentials are optional to support read-only clients
+ * that only access public endpoints.
  */
 export interface ClientOptions {
-  apiKey: string;
-  apiSecret: string;
-  apiPassphrase: string;
+  apiKey?: string;
+  apiSecret?: string;
+  apiPassphrase?: string;
   signer?: any;
   signatureType?: number;
   funderAddress?: string;

@@ -17,6 +17,7 @@
 import { log } from "./logger.js";
 import {
   createClientFromPrivateKey,
+  createReadOnlyClient,
   PolymarketClient,
 } from "./client.js";
 import {
@@ -619,12 +620,13 @@ async function cmdPositions(args: string[], options: CliOptions): Promise<void> 
     }
 
     for (const summary of positions.summary) {
-      console.log(`\n   📊 ${summary.question.substring(0, 80)}...`);
-      console.log(`   ${summary.side} ${summary.total_size.toFixed(2)} @ ${summary.avg_price.toFixed(3)}`);
+      const outcomeIcon = summary.outcome.toLowerCase() === "yes" ? "🟢" : "🔴";
+      console.log(`\n   📊 ${summary.question.substring(0, 60)}...`);
+      console.log(`   ${outcomeIcon} ${summary.outcome.toUpperCase()} ${summary.total_size.toFixed(2)} @ ${summary.avg_price.toFixed(3)}`);
       console.log(`   Positions: ${summary.positions.length}`);
 
       for (const pos of summary.positions) {
-        const icon = pos.side === "BUY" ? "🟢" : "🔴";
+        const icon = pos.outcome.toLowerCase() === "yes" ? "🟢" : "🔴";
         console.log(`     ${icon} ${pos.outcome}: ${pos.size} @ ${pos.price}`);
       }
     }
@@ -632,7 +634,8 @@ async function cmdPositions(args: string[], options: CliOptions): Promise<void> 
 }
 
 async function cmdUserPositions(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient(options);
+  // Use read-only client - no authentication needed for public position data
+  const client = createReadOnlyClient();
   const address = options.address || args[0];
 
   if (!address) {
@@ -657,14 +660,16 @@ async function cmdUserPositions(args: string[], options: CliOptions): Promise<vo
     }
 
     for (const summary of positions.summary) {
-      console.log(`\n   📊 ${summary.question.substring(0, 80)}...`);
-      console.log(`   ${summary.side} ${summary.total_size.toFixed(2)} @ ${summary.avg_price.toFixed(3)}`);
+      const outcomeIcon = summary.outcome.toLowerCase() === "yes" ? "🟢" : "🔴";
+      console.log(`\n   📊 ${summary.question.substring(0, 60)}...`);
+      console.log(`   ${outcomeIcon} ${summary.outcome.toUpperCase()} ${summary.total_size.toFixed(2)} @ ${summary.avg_price.toFixed(3)}`);
     }
   }
 }
 
 async function cmdMarketPositions(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient(options);
+  // Use read-only client - no authentication needed for public position data
+  const client = createReadOnlyClient();
   const conditionId = args[0];
 
   if (!conditionId) {
@@ -693,10 +698,11 @@ async function cmdMarketPositions(args: string[], options: CliOptions): Promise<
     }
 
     for (const summary of positions.summary) {
-      console.log(`\n   ${summary.side} ${summary.total_size.toFixed(2)} @ ${summary.avg_price.toFixed(3)}`);
+      const outcomeIcon = summary.outcome.toLowerCase() === "yes" ? "🟢" : "🔴";
+      console.log(`\n   ${outcomeIcon} ${summary.outcome.toUpperCase()} ${summary.total_size.toFixed(2)} @ ${summary.avg_price.toFixed(3)}`);
 
       for (const pos of summary.positions) {
-        const icon = pos.side === "BUY" ? "🟢" : "🔴";
+        const icon = pos.outcome.toLowerCase() === "yes" ? "🟢" : "🔴";
         console.log(`     ${icon} ${pos.outcome}: ${pos.size} @ ${pos.price}`);
       }
     }

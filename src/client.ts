@@ -27,8 +27,9 @@ import { Wallet } from "@ethersproject/wallet";
 import { LRUCache } from "lru-cache";
 
 import { log } from "./logger.js";
-import { POLYMARKET_CLOB_HOST } from "./constants.js";
+import { POLYMARKET_CLOB_HOST, DATA_API_BASE } from "./constants.js";
 import { PolymarketError, ValidationError } from "./errors.js";
+import { httpRequest } from "./http.js";
 import { getBestPrices } from "./utils/orderbook.js";
 
 import type { ClientOptions, PrivateKeyConfig } from "./types/client.js";
@@ -134,6 +135,30 @@ export async function createClientFromPrivateKey(
   });
 }
 
+/**
+ * Create a read-only PolymarketClient without authentication.
+ *
+ * This client can access public endpoints (markets, orderbooks, positions)
+ * but cannot place orders or access authenticated endpoints.
+ *
+ * Use this when you only need to read public data and don't have credentials.
+ *
+ * @returns Read-only PolymarketClient instance.
+ *
+ * @example
+ * ```typescript
+ * const client = createReadOnlyClient();
+ * const positions = await client.getUserPositions("0x...");
+ * ```
+ */
+export function createReadOnlyClient(): PolymarketClient {
+  log.debug("Creating read-only client (no authentication)");
+
+  return new PolymarketClient({
+    // No API credentials - public endpoints only
+  });
+}
+
 // ============================================================================
 // PolymarketClient
 // ============================================================================
@@ -142,20 +167,26 @@ export class PolymarketClient {
   private sdk: ClobClient;
   private signer?: any;
   private baseUrl: string;
+  private isReadOnly: boolean;
 
-  constructor(options: ClientOptions) {
+  constructor(options: ClientOptions = {}) {
     this.signer = options.signer;
     this.baseUrl = options.baseUrl || POLYMARKET_CLOB_HOST;
+    this.isReadOnly = !options.apiKey;
 
+    // Only create full ClobClient if we have credentials
+    // Read-only clients can still access public endpoints via httpRequest
     this.sdk = new ClobClient(
       this.baseUrl,
       Chain.POLYGON,
       options.signer,
-      {
-        key: options.apiKey,
-        secret: options.apiSecret,
-        passphrase: options.apiPassphrase,
-      },
+      options.apiKey
+        ? {
+            key: options.apiKey,
+            secret: options.apiSecret!,
+            passphrase: options.apiPassphrase!,
+          }
+        : undefined,
       options.signatureType,
       options.funderAddress
     );
@@ -163,6 +194,7 @@ export class PolymarketClient {
     log.debug("PolymarketClient initialized", {
       baseUrl: this.baseUrl,
       hasSigner: !!this.signer,
+      isReadOnly: this.isReadOnly,
     });
   }
 
@@ -189,7 +221,7 @@ export class PolymarketClient {
    */
   private async apiGet<T>(endpoint: string): Promise<T> {
     // @ts-expect-error - accessing protected method
-    return this.sdk.get(endpoint) as Promise<T>;
+    return this.sdk.get(`${this.baseUrl}${endpoint}`) as Promise<T>;
   }
 
   /**
@@ -197,7 +229,7 @@ export class PolymarketClient {
    */
   private async apiPost<T>(endpoint: string, body?: unknown): Promise<T> {
     // @ts-expect-error - accessing protected method
-    return this.sdk.post(endpoint, { body } as any) as Promise<T>;
+    return this.sdk.post(`${this.baseUrl}${endpoint}`, { body } as any) as Promise<T>;
   }
 
   // ========================================================================
@@ -622,21 +654,20 @@ export class PolymarketClient {
       limit?: number;
     }
   ): Promise<PositionsResponse> {
-    const params: Record<string, string> = { address };
+    const params: Record<string, string> = { user: address };
     if (options?.next_cursor) params.next_cursor = options.next_cursor;
     if (options?.limit) params.limit = String(options.limit);
 
-    const response = await this.apiGet<{ positions?: any[]; next_cursor?: string }>(
-      `/positions?${new URLSearchParams(params)}`
-    );
+    const url = `${DATA_API_BASE}/positions?${new URLSearchParams(params)}`;
+    const response = await httpRequest<any[]>(url);
 
-    const positions = (response.positions ?? []).map((p: any) => this.normalizePosition(p));
+    const positions = (response ?? []).map((p: any) => this.normalizePosition(p));
     const summary = this.summarizePositions(positions);
 
     return {
       positions,
       summary,
-      next_cursor: response.next_cursor,
+      next_cursor: undefined, // Data API doesn't use cursor pagination
     };
   }
 
@@ -657,21 +688,19 @@ export class PolymarketClient {
     }
   ): Promise<PositionsResponse> {
     const params: Record<string, string> = { market: conditionId };
-    if (address) params.address = address;
-    if (options?.next_cursor) params.next_cursor = options.next_cursor;
+    if (address) params.user = address;
     if (options?.limit) params.limit = String(options.limit);
 
-    const response = await this.apiGet<{ positions?: any[]; next_cursor?: string }>(
-      `/positions?${new URLSearchParams(params)}`
-    );
+    const url = `${DATA_API_BASE}/positions?${new URLSearchParams(params)}`;
+    const response = await httpRequest<any[]>(url);
 
-    const positions = (response.positions ?? []).map((p: any) => this.normalizePosition(p));
+    const positions = (response ?? []).map((p: any) => this.normalizePosition(p));
     const summary = this.summarizePositions(positions);
 
     return {
       positions,
       summary,
-      next_cursor: response.next_cursor,
+      next_cursor: undefined, // Data API doesn't use cursor pagination
     };
   }
 
@@ -906,18 +935,18 @@ export class PolymarketClient {
   private normalizePosition(pos: any): Position {
     return {
       order_id: pos.order_id || pos.orderID,
-      asset_id: pos.asset_id || pos.tokenID || pos.tokenId,
+      asset_id: pos.asset_id || pos.asset || pos.tokenID || pos.tokenId,
       side: (pos.side as OrderSide) || "BUY",
-      size: pos.size || "0",
-      price: pos.price || "0",
+      size: String(pos.size ?? "0"),
+      price: String(pos.price ?? pos.avgPrice ?? pos.curPrice ?? "0"),
       original_size: pos.original_size || pos.originalSize,
       original_price: pos.original_price || pos.originalPrice,
       filled_size: pos.filled_size || pos.filledSize,
       remaining_size: pos.remaining_size || pos.remainingSize,
       status: pos.status || "OPEN",
       outcome: pos.outcome || "",
-      condition_id: pos.condition_id || pos.market || "",
-      market_question: pos.market_question || pos.question,
+      condition_id: pos.condition_id || pos.conditionId || pos.market || "",
+      market_question: pos.market_question || pos.question || pos.title,
       market_slug: pos.market_slug || pos.slug,
       created_at: pos.created_at || pos.createdAt || new Date().toISOString(),
       updated_at: pos.updated_at || pos.updatedAt,
@@ -956,6 +985,7 @@ export class PolymarketClient {
         total_size: totalSize,
         avg_price: avgPrice,
         side,
+        outcome: firstPos.outcome || "",
       });
     }
 

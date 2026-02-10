@@ -83,6 +83,7 @@ export {
   POLYMARKET_CLOB_HOST,
   POLYMARKET_WS_URL,
   GAMMA_API_BASE,
+  DATA_API_BASE,
   VERSION,
 } from "./constants.js";
 
@@ -94,7 +95,11 @@ export {
 } from "./errors.js";
 
 // ── Client ──────────────────────────────────────────────────────────────────
-export { PolymarketClient, createClientFromPrivateKey } from "./client.js";
+export {
+  PolymarketClient,
+  createClientFromPrivateKey,
+  createReadOnlyClient,
+} from "./client.js";
 
 // ── Gamma API (market discovery) ────────────────────────────────────────────
 export {

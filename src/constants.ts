@@ -14,5 +14,8 @@ export const POLYMARKET_WS_URL = "wss://ws-subscriptions-clob.polymarket.com";
 /** Base URL for the Gamma API (market discovery). */
 export const GAMMA_API_BASE = "https://gamma-api.polymarket.com";
 
+/** Base URL for the Data API (positions, profiles, etc.). */
+export const DATA_API_BASE = "https://data-api.polymarket.com";
+
 /** Current SDK version. */
 export const VERSION = "0.4.0";

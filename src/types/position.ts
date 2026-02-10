@@ -36,6 +36,8 @@ export interface PositionSummary {
   total_size: number;
   avg_price: number;
   side: OrderSide;
+  /** The outcome being held (Yes/No). */
+  outcome: string;
 }
 
 /** Paginated response containing positions and summaries. */
