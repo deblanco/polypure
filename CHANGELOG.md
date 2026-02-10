@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/deblanco/polypure/compare/v1.0.0...v1.1.0) (2026-02-10)
+
+
+### Features
+
+* implement private key authentication for Polymarket client and update CLI usage ([9496818](https://github.com/deblanco/polypure/commit/94968183f8303ef73be50497100d0ac626fd6526))
+
 # 1.0.0 (2026-02-10)
 
 
