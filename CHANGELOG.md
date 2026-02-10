@@ -1,3 +1,10 @@
+## [1.4.1](https://github.com/deblanco/polypure/compare/v1.4.0...v1.4.1) (2026-02-10)
+
+
+### Bug Fixes
+
+* use deriveApiKey directly to resolve API key creation error ([2f7beb9](https://github.com/deblanco/polypure/commit/2f7beb9601aedb59da334e848ab57e7ab16ab520))
+
 # [1.4.0](https://github.com/deblanco/polypure/compare/v1.3.0...v1.4.0) (2026-02-10)
 
 
