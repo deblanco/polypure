@@ -21,9 +21,9 @@ Add to your `claude_desktop_config.json`:
       "command": "npx",
       "args": ["polypure-mcp"],
       "env": {
-        "POLYMARKET_API_KEY": "your-api-key",
-        "POLYMARKET_API_SECRET": "your-api-secret",
-        "POLYMARKET_API_PASSPHRASE": "your-passphrase"
+        "POLYMARKET_PRIVATE_KEY": "0x...",
+        "POLYMARKET_FUNDER_ADDRESS": "0x...",
+        "POLYMARKET_SIGNATURE_TYPE": "1"
       }
     }
   }
@@ -52,9 +52,9 @@ Add to Cursor settings under MCP Servers:
     "command": "npx",
     "args": ["polypure-mcp"],
     "env": {
-      "POLYMARKET_API_KEY": "your-api-key",
-      "POLYMARKET_API_SECRET": "your-api-secret",
-      "POLYMARKET_API_PASSPHRASE": "your-passphrase"
+      "POLYMARKET_PRIVATE_KEY": "0x...",
+      "POLYMARKET_FUNDER_ADDRESS": "0x...",
+      "POLYMARKET_SIGNATURE_TYPE": "1"
     }
   }
 }
@@ -66,11 +66,18 @@ The MCP server reads credentials from environment variables:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `POLYMARKET_API_KEY` | For authenticated tools | Your Polymarket API key |
-| `POLYMARKET_API_SECRET` | For authenticated tools | Your Polymarket API secret |
-| `POLYMARKET_API_PASSPHRASE` | For authenticated tools | Your Polymarket API passphrase |
+| `POLYMARKET_PRIVATE_KEY` | For trading | Your wallet private key (hex) |
+| `POLYMARKET_FUNDER_ADDRESS` | For trading | Your Polymarket profile address |
+| `POLYMARKET_SIGNATURE_TYPE` | No | `0` = Browser Wallet, `1` = Magic/Email (default: `1`) |
+
+**How to get your credentials:**
+- **Private Key (Magic/Email login):** Export from https://reveal.magic.link/polymarket
+- **Private Key (Browser wallet):** Export from MetaMask, Coinbase Wallet, etc.
+- **Funder Address:** Your Polymarket profile address where you send USDC
 
 **Without credentials**, the server starts in read-only mode. Market discovery tools (`search_series`, `get_series`) work without authentication via the Gamma API. All other tools return a clear error prompting you to set credentials.
+
+API credentials (key, secret, passphrase) are automatically derived from your private key at startup and cached for 1 minute.
 
 ## Tools Reference
 
@@ -297,7 +304,7 @@ All logging is directed to stderr to keep stdout clean for the MCP protocol. The
 
 ### "Authentication required" errors
 
-Set the three environment variables in your MCP client configuration. Market discovery tools (`search_series`, `get_series`) work without credentials.
+Set `POLYMARKET_PRIVATE_KEY` and `POLYMARKET_FUNDER_ADDRESS` in your MCP client configuration. Market discovery tools (`search_series`, `get_series`) work without credentials.
 
 ### Server not starting
 

@@ -52,6 +52,11 @@ type Command =
   | "help";
 
 interface CliOptions {
+  // Authentication
+  privateKey?: string;
+  funder?: string;
+  signatureType?: number;
+  // Trading
   outcome?: string;
   tokenId?: string;
   amount?: number;
@@ -79,6 +84,22 @@ function parseArgs(args: string[]): { command: Command; args: string[]; options:
     const next = args[i + 1];
 
     switch (arg) {
+      // Authentication
+      case "--private-key":
+      case "-k":
+        options.privateKey = next;
+        i++;
+        break;
+      case "--funder":
+      case "-f":
+        options.funder = next;
+        i++;
+        break;
+      case "--signature-type":
+        options.signatureType = parseInt(next);
+        i++;
+        break;
+      // Trading
       case "--outcome":
       case "-o":
         options.outcome = next;
@@ -150,17 +171,23 @@ function parseArgs(args: string[]): { command: Command; args: string[]; options:
 // Client Factory
 // ============================================================================
 
-async function createClient(): Promise<PolymarketClient> {
-  const privateKey = process.env.POLYMARKET_PRIVATE_KEY;
-  const funderAddress = process.env.POLYMARKET_FUNDER_ADDRESS;
-  const signatureType = parseInt(process.env.POLYMARKET_SIGNATURE_TYPE || "1") as 0 | 1;
+async function createClient(options: CliOptions = {}): Promise<PolymarketClient> {
+  const privateKey = options.privateKey || process.env.POLYMARKET_PRIVATE_KEY;
+  const funderAddress = options.funder || process.env.POLYMARKET_FUNDER_ADDRESS;
+  const signatureType = (options.signatureType ?? 
+    parseInt(process.env.POLYMARKET_SIGNATURE_TYPE || "1")) as 0 | 1;
 
   if (!privateKey || !funderAddress) {
     throw new Error(
-      "Missing credentials. Set POLYMARKET_PRIVATE_KEY and POLYMARKET_FUNDER_ADDRESS environment variables.\n\n" +
-      "POLYMARKET_PRIVATE_KEY     - Your wallet private key (hex)\n" +
-      "POLYMARKET_FUNDER_ADDRESS  - Your Polymarket profile address\n" +
-      "POLYMARKET_SIGNATURE_TYPE  - 0 = Browser Wallet, 1 = Magic/Email (default: 1)"
+      "Missing credentials. Provide --private-key and --funder flags, or set environment variables.\n\n" +
+      "Options:\n" +
+      "  --private-key, -k <key>  Your wallet private key (hex)\n" +
+      "  --funder, -f <addr>      Your Polymarket profile address\n" +
+      "  --signature-type <n>     0 = Browser Wallet, 1 = Magic/Email (default: 1)\n\n" +
+      "Environment variables:\n" +
+      "  POLYMARKET_PRIVATE_KEY     - Your wallet private key (hex)\n" +
+      "  POLYMARKET_FUNDER_ADDRESS  - Your Polymarket profile address\n" +
+      "  POLYMARKET_SIGNATURE_TYPE  - 0 = Browser Wallet, 1 = Magic/Email (default: 1)"
     );
   }
 
@@ -259,7 +286,7 @@ function formatOrder(order: any): string {
 // ============================================================================
 
 async function cmdMarket(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient();
+  const client = await createClient(options);
   const conditionId = args[0];
 
   if (!conditionId) {
@@ -277,7 +304,7 @@ async function cmdMarket(args: string[], options: CliOptions): Promise<void> {
 }
 
 async function cmdMarkets(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient();
+  const client = await createClient(options);
   const markets = await client.getMarkets();
   const limit = options.limit || 20;
 
@@ -293,7 +320,7 @@ async function cmdMarkets(args: string[], options: CliOptions): Promise<void> {
 }
 
 async function cmdSearch(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient();
+  const client = await createClient(options);
   const query = args.join(" ");
 
   if (!query) {
@@ -315,7 +342,7 @@ async function cmdSearch(args: string[], options: CliOptions): Promise<void> {
 }
 
 async function cmdOrderbook(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient();
+  const client = await createClient(options);
   const marketId = args[0];
 
   if (!marketId) {
@@ -338,7 +365,7 @@ async function cmdOrderbook(args: string[], options: CliOptions): Promise<void> 
 }
 
 async function cmdPlaceOrder(side: OrderSide, args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient();
+  const client = await createClient(options);
   const marketId = args[0];
 
   if (!marketId || !options.amount || !options.price) {
@@ -371,7 +398,7 @@ async function cmdPlaceOrder(side: OrderSide, args: string[], options: CliOption
 }
 
 async function cmdCancel(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient();
+  const client = await createClient(options);
   const orderId = args[0];
 
   if (!orderId) {
@@ -384,7 +411,7 @@ async function cmdCancel(args: string[], options: CliOptions): Promise<void> {
 }
 
 async function cmdOrders(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient();
+  const client = await createClient(options);
   const orders = await client.getOrders();
 
   if (options.json) {
@@ -399,7 +426,7 @@ async function cmdOrders(args: string[], options: CliOptions): Promise<void> {
 }
 
 async function cmdBalance(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient();
+  const client = await createClient(options);
   const balance = await client.getUSDCBalance();
 
   if (options.json) {
@@ -410,13 +437,13 @@ async function cmdBalance(args: string[], options: CliOptions): Promise<void> {
 }
 
 async function cmdAllowance(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient();
+  const client = await createClient(options);
   await client.updateAllowance();
   console.log("✓ Allowance updated");
 }
 
 async function cmdTrades(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient();
+  const client = await createClient(options);
   const trades = await client.getTrades();
 
   if (options.json) {
@@ -496,7 +523,7 @@ async function cmdFind(args: string[], options: CliOptions): Promise<void> {
 }
 
 async function cmdEarnings(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient();
+  const client = await createClient(options);
   const date = args[0] || new Date().toISOString().split('T')[0];
 
   const earnings = await client.getUserEarnings(date);
@@ -517,7 +544,7 @@ async function cmdEarnings(args: string[], options: CliOptions): Promise<void> {
 }
 
 async function cmdTotalEarnings(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient();
+  const client = await createClient(options);
   const date = args[0] || new Date().toISOString().split('T')[0];
 
   const earnings = await client.getTotalUserEarnings(date);
@@ -536,7 +563,7 @@ async function cmdTotalEarnings(args: string[], options: CliOptions): Promise<vo
 }
 
 async function cmdRewards(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient();
+  const client = await createClient(options);
   const date = args[0] || new Date().toISOString().split('T')[0];
 
   const rewards = await client.getUserRewardsEarnings(date, {
@@ -575,7 +602,7 @@ async function cmdRewards(args: string[], options: CliOptions): Promise<void> {
 // ============================================================================
 
 async function cmdPositions(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient();
+  const client = await createClient(options);
   const positions = await client.getCurrentPositions({
     next_cursor: undefined,
     limit: options.limit,
@@ -605,7 +632,7 @@ async function cmdPositions(args: string[], options: CliOptions): Promise<void> 
 }
 
 async function cmdUserPositions(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient();
+  const client = await createClient(options);
   const address = options.address || args[0];
 
   if (!address) {
@@ -637,7 +664,7 @@ async function cmdUserPositions(args: string[], options: CliOptions): Promise<vo
 }
 
 async function cmdMarketPositions(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient();
+  const client = await createClient(options);
   const conditionId = args[0];
 
   if (!conditionId) {
@@ -681,7 +708,7 @@ async function cmdMarketPositions(args: string[], options: CliOptions): Promise<
 // ============================================================================
 
 async function cmdPortfolio(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient();
+  const client = await createClient(options);
   const portfolio = await client.getPortfolio(options.address);
 
   if (options.json) {
@@ -711,7 +738,7 @@ async function cmdPortfolio(args: string[], options: CliOptions): Promise<void> 
 }
 
 async function cmdProfile(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient();
+  const client = await createClient(options);
   const address = args[0] || options.address;
 
   if (!address) {
@@ -743,7 +770,7 @@ async function cmdProfile(args: string[], options: CliOptions): Promise<void> {
 }
 
 async function cmdProfileStats(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient();
+  const client = await createClient(options);
   const address = args[0] || options.address;
 
   if (!address) {
@@ -768,7 +795,7 @@ async function cmdProfileStats(args: string[], options: CliOptions): Promise<voi
 }
 
 async function cmdUserTrades(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient();
+  const client = await createClient(options);
   const address = options.address || args[0];
 
   if (!address) {
@@ -809,10 +836,21 @@ Polypure CLI - Polymarket Trading Tool
 
 Usage: bun cli.ts <command> [args] [options]
 
-Environment Variables (required):
-  POLYMARKET_PRIVATE_KEY     Your wallet private key (hex)
-  POLYMARKET_FUNDER_ADDRESS  Your Polymarket profile address
-  POLYMARKET_SIGNATURE_TYPE  0 = Browser Wallet, 1 = Magic/Email (default: 1)
+Authentication:
+  Provide credentials via CLI flags or environment variables.
+
+  CLI Flags:
+    --private-key, -k <key>  Wallet private key (hex)
+    --funder, -f <addr>      Polymarket profile address
+    --signature-type <n>     0 = Browser Wallet, 1 = Magic/Email (default: 1)
+
+  Environment Variables:
+    POLYMARKET_PRIVATE_KEY     Your wallet private key (hex)
+    POLYMARKET_FUNDER_ADDRESS  Your Polymarket profile address
+    POLYMARKET_SIGNATURE_TYPE  0 = Browser Wallet, 1 = Magic/Email (default: 1)
+
+  WARNING: Private keys passed via CLI flags are visible in process lists
+  and shell history. Using environment variables is recommended for security.
 
 Commands:
   market <id>              Get market by condition ID
@@ -848,6 +886,9 @@ Commands:
   help                     Show this help
 
 Options:
+  --private-key, -k <key>  Wallet private key (or POLYMARKET_PRIVATE_KEY env)
+  --funder, -f <addr>      Polymarket profile address (or POLYMARKET_FUNDER_ADDRESS env)
+  --signature-type <n>     0 = Browser Wallet, 1 = Magic/Email (default: 1)
   --outcome, -o <out>      Outcome name (YES, NO, etc.)
   --tokenId, -t <id>       Token ID (alternative to outcome)
   --amount, -a <n>         Order amount in shares
@@ -863,9 +904,13 @@ Options:
   --help, -h               Show help
 
 Examples:
-  # First, set your credentials:
+  # Using environment variables (recommended - more secure)
   export POLYMARKET_PRIVATE_KEY="0x..."
   export POLYMARKET_FUNDER_ADDRESS="0x..."
+  bun cli.ts balance
+
+  # Using CLI flags (less secure - visible in shell history)
+  bun cli.ts balance --private-key 0x... --funder 0x...
 
   # Market data
   bun cli.ts market 0xabc123...

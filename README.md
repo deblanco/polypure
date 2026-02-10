@@ -17,6 +17,10 @@ npm install polypure
 Polypure includes an [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server that lets AI agents like Claude interact with Polymarket directly. 19 tools covering market discovery, orderbook analysis, portfolio tracking, and trading.
 
 ```bash
+# Set credentials
+export POLYMARKET_PRIVATE_KEY="0x..."
+export POLYMARKET_FUNDER_ADDRESS="0x..."
+
 # Run the MCP server
 npx polypure-mcp
 ```
@@ -35,6 +39,11 @@ The SDK uses Winston for structured JSON logging. All logs are written to consol
 ### Environment Variables
 
 ```bash
+# Authentication (required for trading)
+export POLYMARKET_PRIVATE_KEY="0x..."      # Your wallet private key
+export POLYMARKET_FUNDER_ADDRESS="0x..."   # Your Polymarket profile address
+export POLYMARKET_SIGNATURE_TYPE=1         # 0 = Browser Wallet, 1 = Magic/Email (default)
+
 # Set log level (default: debug)
 export LOG_LEVEL=debug  # Options: error, warn, info, debug
 ```
@@ -82,12 +91,13 @@ log.error("Error occurred", new Error("Something went wrong"));
 ## Quick Start
 
 ```typescript
-import { PolymarketClient } from "polypure";
+import { createClientFromPrivateKey } from "polypure";
 
-const client = new PolymarketClient({
-  apiKey: process.env.POLY_API_KEY!,
-  apiSecret: process.env.POLY_API_SECRET!,
-  apiPassphrase: process.env.POLY_API_PASSPHRASE!,
+// Create client from private key (API credentials derived automatically)
+const client = await createClientFromPrivateKey({
+  privateKey: process.env.POLYMARKET_PRIVATE_KEY!,
+  funderAddress: process.env.POLYMARKET_FUNDER_ADDRESS!,
+  signatureType: 1, // 0 = Browser Wallet, 1 = Magic/Email (default)
 });
 
 // Get a market
@@ -137,18 +147,28 @@ bun src/cli.ts --help
 
 ### Authentication
 
-Provide credentials via flags or environment variables:
+Provide credentials via CLI flags or environment variables:
 
 ```bash
-# Flags
-bun cli.ts market 0xabc... --key API_KEY --secret SECRET --pass PASSPHRASE
+# Using environment variables (recommended - more secure)
+export POLYMARKET_PRIVATE_KEY="0x..."
+export POLYMARKET_FUNDER_ADDRESS="0x..."
+bun cli.ts balance
 
-# Environment variables (recommended)
-export POLY_API_KEY="your-api-key"
-export POLY_API_SECRET="your-api-secret"
-export POLY_API_PASSPHRASE="your-passphrase"
-bun cli.ts market 0xabc...
+# Using CLI flags (less secure - visible in shell history)
+bun cli.ts balance --private-key 0x... --funder 0x...
+
+# Mixed approach
+export POLYMARKET_PRIVATE_KEY="0x..."
+bun cli.ts balance --funder 0x...
 ```
+
+> **Security Warning:** Private keys passed via CLI flags are visible in your shell history and process lists. Using environment variables is recommended.
+
+**How to get your credentials:**
+- **Private Key (Magic/Email login):** Export from https://reveal.magic.link/polymarket
+- **Private Key (Browser wallet):** Export from MetaMask, Coinbase Wallet, etc.
+- **Funder Address:** Your Polymarket profile address where you send USDC
 
 ### Commands
 
@@ -189,8 +209,7 @@ bun cli.ts orderbook 0xabc123... --tokenId 0xdef456...
 bun cli.ts buy 0xabc123... \
   --amount 100 \
   --price 0.65 \
-  --outcome YES \
-  --key KEY --secret SECRET --pass PASS
+  --outcome YES
 
 # Place sell order
 bun cli.ts sell 0xabc123... \
@@ -300,9 +319,9 @@ bun cli.ts profile-stats 0xabc123... --json | jq '{win_rate, roi, total_earnings
 
 | Option | Short | Description |
 |--------|-------|-------------|
-| `--key` | `-k` | API key |
-| `----secret` | `-s` | API secret |
-| `--pass` | `-p` | API passphrase |
+| `--private-key` | `-k` | Wallet private key (or `POLYMARKET_PRIVATE_KEY` env) |
+| `--funder` | `-f` | Polymarket profile address (or `POLYMARKET_FUNDER_ADDRESS` env) |
+| `--signature-type` | | 0 = Browser Wallet, 1 = Magic/Email (default: 1) |
 | `--outcome` | `-o` | Outcome name (YES, NO, etc.) |
 | `--tokenId` | `-t` | Token ID (alternative to outcome) |
 | `--amount` | `-a` | Order amount in shares |
@@ -313,9 +332,6 @@ bun cli.ts profile-stats 0xabc123... --json | jq '{win_rate, roi, total_earnings
 | `--position` | | Filter rewards by position (maker, taker) |
 | `--no-competition` | | Exclude competition rewards |
 | `--address` | | Wallet address for profile queries |
-| `--proxy` | | Gnosis Safe proxy address |
-| `--rpc` | | Polygon RPC URL |
-| `--funder` | | Funder address |
 | `--json` | `-j` | Output JSON |
 | `--raw` | `-r` | Output raw JSON |
 | `--help` | `-h` | Show help |
@@ -363,19 +379,19 @@ bun cli.ts series my-series-slug --json | \
 
 ```bash
 # 1. Look up a user's portfolio
-bun cli.ts portfolio 0xabc123... -k KEY -s SECRET -p PASS
+bun cli.ts portfolio --address 0xabc123...
 
 # 2. Check their current positions
-bun cli.ts user-positions 0xabc123... -k KEY -s SECRET -p PASS
+bun cli.ts user-positions 0xabc123...
 
 # 3. Get their trading stats
-bun cli.ts profile-stats 0xabc123... -k KEY -s SECRET -p PASS
+bun cli.ts profile-stats 0xabc123...
 
 # 4. Analyze their recent trades
-bun cli.ts user-trades 0xabc123... -l 50 -k KEY -s SECRET -p PASS
+bun cli.ts user-trades 0xabc123... -l 50
 
 # 5. Export to JSON for custom analysis
-bun cli.ts portfolio 0xabc123... --json -k KEY -s SECRET -p PASS | \
+bun cli.ts portfolio --address 0xabc123... --json | \
   jq '{value: .total_value, pnl: .unrealized_pnl, roi: (.unrealized_pnl / .total_cost * 100)}'
 ```
 
@@ -383,49 +399,48 @@ bun cli.ts portfolio 0xabc123... --json -k KEY -s SECRET -p PASS | \
 
 ## Authentication
 
-Create a client with your Polymarket API credentials:
+Create a client using your private key. API credentials are derived automatically:
 
 ```typescript
-const client = new PolymarketClient({
-  apiKey: "your-api-key",
-  apiSecret: "your-api-secret",
-  apiPassphrase: "your-passphrase",
+import { createClientFromPrivateKey } from "polypure";
+
+const client = await createClientFromPrivateKey({
+  privateKey: process.env.POLYMARKET_PRIVATE_KEY!,
+  funderAddress: process.env.POLYMARKET_FUNDER_ADDRESS!,
+  signatureType: 1, // 0 = Browser Wallet, 1 = Magic/Email (default)
 });
 ```
 
-### With Signer (for deriving API keys)
+### Getting Your Credentials
+
+| Credential | How to Obtain |
+|------------|---------------|
+| **Private Key (Magic/Email)** | Export from https://reveal.magic.link/polymarket |
+| **Private Key (Browser Wallet)** | Export from MetaMask, Coinbase Wallet, etc. |
+| **Funder Address** | Your Polymarket profile address where you send USDC |
+
+### Configuration Options
 
 ```typescript
-import { Wallet } from "ethers";
-
-const wallet = new Wallet(privateKey);
-
-const client = new PolymarketClient({
-  apiKey: "...",
-  apiSecret: "...",
-  apiPassphrase: "...",
-  signer: wallet,
-});
-
-// Derive new API key from signer
-const newAuth = await client.deriveApiKey();
-```
-
-### Options
-
-```typescript
-interface ClientOptions {
-  apiKey: string;
-  apiSecret: string;
-  apiPassphrase: string;
-  proxyAddress?: string;     // Gnosis Safe proxy
-  signer?: any;              // ethers/viem signer
-  rpcUrl?: string;           // Polygon RPC
-  signatureType?: number;    // Signature type
-  funderAddress?: string;    // Gnosis Safe funder
-  baseUrl?: string;          // Custom CLOB URL
+interface PrivateKeyConfig {
+  /** Wallet private key (hex string, with or without 0x prefix). */
+  privateKey: string;
+  
+  /** Polymarket profile address (where you send USDC to fund your account). */
+  funderAddress: string;
+  
+  /**
+   * Signature type for order signing.
+   * - 0 = Browser Wallet (MetaMask, Coinbase Wallet, etc.)
+   * - 1 = Magic/Email Login (default)
+   */
+  signatureType?: 0 | 1;
 }
 ```
+
+### Credential Caching
+
+API credentials derived from your private key are cached for 1 minute to avoid repeated derivation calls. The cache supports up to 10 different wallets.
 
 ---
 
@@ -1160,7 +1175,7 @@ import type {
 
   // Client
   ClientOptions,
-  AuthConfig,
+  PrivateKeyConfig,
 } from "polypure";
 ```
 
@@ -1185,17 +1200,16 @@ console.log(VERSION);  // "0.2.0"
 
 ```typescript
 import { 
-  PolymarketClient, 
+  createClientFromPrivateKey, 
   getSeries, 
   getBestPrices, 
   isArbitrage,
   normalizeOrder 
 } from "polypure";
 
-const client = new PolymarketClient({
-  apiKey: process.env.POLY_API_KEY!,
-  apiSecret: process.env.POLY_API_SECRET!,
-  apiPassphrase: process.env.POLY_API_PASSPHRASE!,
+const client = await createClientFromPrivateKey({
+  privateKey: process.env.POLYMARKET_PRIVATE_KEY!,
+  funderAddress: process.env.POLYMARKET_FUNDER_ADDRESS!,
 });
 
 async function checkArbitrage() {
