@@ -112,7 +112,9 @@ export async function createClientFromPrivateKey(
       signer
     );
 
-    const derived = await tempClient.createOrDeriveApiKey();
+    // Use deriveApiKey directly to avoid "Could not create api key" error message
+    // that occurs when trying createOrDeriveApiKey (it tries create first, then derive)
+    const derived = await tempClient.deriveApiKey();
     creds = {
       key: derived.key,
       secret: derived.secret,
