@@ -626,18 +626,8 @@ export class PolymarketClient {
     next_cursor?: string;
     limit?: number;
   }): Promise<PositionsResponse> {
-    const response = await this.apiGet<{ positions?: any[]; next_cursor?: string }>(
-      `/positions/me${this.buildQueryString(options)}`
-    );
-
-    const positions = (response.positions ?? []).map((p: any) => this.normalizePosition(p));
-    const summary = this.summarizePositions(positions);
-
-    return {
-      positions,
-      summary,
-      next_cursor: response.next_cursor,
-    };
+    const address = await this.getSignerAddress();
+    return this.getUserPositions(address, options);
   }
 
   /**

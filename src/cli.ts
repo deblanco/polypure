@@ -287,7 +287,8 @@ function formatOrder(order: any): string {
 // ============================================================================
 
 async function cmdMarket(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient(options);
+  // Use read-only client - no authentication needed for public market data
+  const client = createReadOnlyClient();
   const conditionId = args[0];
 
   if (!conditionId) {
@@ -305,7 +306,8 @@ async function cmdMarket(args: string[], options: CliOptions): Promise<void> {
 }
 
 async function cmdMarkets(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient(options);
+  // Use read-only client - no authentication needed for public market data
+  const client = createReadOnlyClient();
   const markets = await client.getMarkets();
   const limit = options.limit || 20;
 
@@ -321,7 +323,8 @@ async function cmdMarkets(args: string[], options: CliOptions): Promise<void> {
 }
 
 async function cmdSearch(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient(options);
+  // Use read-only client - no authentication needed for public market data
+  const client = createReadOnlyClient();
   const query = args.join(" ");
 
   if (!query) {
@@ -343,7 +346,8 @@ async function cmdSearch(args: string[], options: CliOptions): Promise<void> {
 }
 
 async function cmdOrderbook(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient(options);
+  // Use read-only client - no authentication needed for public orderbook data
+  const client = createReadOnlyClient();
   const marketId = args[0];
 
   if (!marketId) {
@@ -671,15 +675,22 @@ async function cmdMarketPositions(args: string[], options: CliOptions): Promise<
   // Use read-only client - no authentication needed for public position data
   const client = createReadOnlyClient();
   const conditionId = args[0];
+  const address = options.address;
 
   if (!conditionId) {
-    console.error("Usage: cli.ts market-positions <conditionId> [--address 0xabc...]");
+    console.error("Usage: cli.ts market-positions <conditionId> --address 0xabc...");
+    process.exit(1);
+  }
+
+  if (!address) {
+    console.error("Error: --address is required to query market positions");
+    console.error("Usage: cli.ts market-positions <conditionId> --address 0xabc...");
     process.exit(1);
   }
 
   const positions = await client.getMarketPositions(
     conditionId,
-    options.address,
+    address,
     {
       next_cursor: undefined,
       limit: options.limit,
@@ -689,8 +700,7 @@ async function cmdMarketPositions(args: string[], options: CliOptions): Promise<
   if (options.json) {
     output(positions, options);
   } else {
-    const target = options.address ? ` for ${options.address}` : " (your positions)";
-    console.log(`📦 Market positions${target} (${positions.positions.length} total):`);
+    console.log(`📦 Market positions for ${address} (${positions.positions.length} total):`);
 
     if (positions.summary.length === 0) {
       console.log("   No positions in this market");
@@ -744,7 +754,8 @@ async function cmdPortfolio(args: string[], options: CliOptions): Promise<void> 
 }
 
 async function cmdProfile(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient(options);
+  // Use read-only client - no authentication needed for public profile data
+  const client = createReadOnlyClient();
   const address = args[0] || options.address;
 
   if (!address) {
@@ -877,7 +888,7 @@ Commands:
   Positions:
   positions                Show your current positions
   user-positions <addr>    Show positions for a wallet address
-  market-positions <id>    Show positions in a market [--address]
+  market-positions <id>    Show positions in a market --address 0x...
 
   Profile:
   portfolio [--address]    Show portfolio summary
