@@ -1,8 +1,8 @@
 # Polypure
 
-A thin, zero-side-effects TypeScript SDK for [Polymarket](https://polymarket.com) prediction markets.
+A thin TypeScript SDK for [Polymarket](https://polymarket.com) prediction markets. Ships with a full CLI, an MCP server for AI agents, and clean programmatic access to the CLOB API.
 
-**Philosophy**: No logging, no polling, no services. Pure functions and thin wrappers. You control the flow.
+**Philosophy**: Pure functions and thin wrappers. You control the flow.
 
 ## Installation
 
@@ -11,6 +11,22 @@ bun add polypure
 # or
 npm install polypure
 ```
+
+## MCP Server (AI Agent Integration)
+
+Polypure includes an [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server that lets AI agents like Claude interact with Polymarket directly. 19 tools covering market discovery, orderbook analysis, portfolio tracking, and trading.
+
+```bash
+# Run the MCP server
+npx polypure-mcp
+```
+
+```bash
+# Add to Claude Code
+claude mcp add polypure -- npx polypure-mcp
+```
+
+See **[MCP.md](./MCP.md)** for full setup instructions, tool reference, and configuration for Claude Desktop, Claude Code, and Cursor.
 
 ## Logging
 
@@ -85,6 +101,7 @@ console.log(book.bids[0]);  // { price: 0.65, size: 1000 }
 
 ## Table of Contents
 
+- [MCP Server (AI Agent Integration)](#mcp-server-ai-agent-integration)
 - [CLI (Command Line)](#cli-command-line)
 - [Authentication](#authentication)
 - [Markets](#markets)

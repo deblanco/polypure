@@ -806,11 +806,11 @@ async function cmdProfileStats(args: string[], options: CliOptions): Promise<voi
   } else {
     console.log(`📊 Stats for ${address.substring(0, 8)}...${address.substring(38)}:`);
     console.log(`   Total Trades: ${stats.total_trades}`);
-    console.log(`   Total Volume: $${stats.total_volume.toFixed(2)}`);
-    console.log(`   Total Earnings: $${stats.total_earnings.toFixed(2)}`);
+    console.log(`   Total Volume: $${(stats.total_volume ?? 0).toFixed(2)}`);
+    console.log(`   Total Earnings: $${(stats.total_earnings ?? 0).toFixed(2)}`);
     console.log(`   Markets Traded: ${stats.markets_traded}`);
-    console.log(`   Win Rate: ${stats.win_rate.toFixed(1)}%`);
-    console.log(`   ROI: ${stats.roi.toFixed(2)}%`);
+    console.log(`   Win Rate: ${(stats.win_rate ?? 0).toFixed(1)}%`);
+    console.log(`   ROI: ${(stats.roi ?? 0).toFixed(2)}%`);
   }
 }
 
@@ -842,7 +842,7 @@ async function cmdUserTrades(args: string[], options: CliOptions): Promise<void>
     for (const trade of trades.trades) {
       const icon = trade.side === "BUY" ? "🟢" : "🔴";
       const date = new Date(trade.match_time).toLocaleDateString();
-      console.log(`\n   ${icon} ${trade.question || trade.market}`);
+      console.log(`\n   ${icon} ${(trade as any).question || trade.market}`);
       console.log(`      ${trade.side} ${trade.size} @ ${trade.price}`);
       console.log(`      Date: ${date}`);
       console.log(`      Side: ${trade.trader_side}`);

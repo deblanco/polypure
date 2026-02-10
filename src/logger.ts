@@ -10,10 +10,12 @@ const jsonFormat = winston.format.combine(
   winston.format.json()
 );
 
-// Console transport with JSON format
+// Console transport with JSON format -- writes to stderr to keep stdout clean
+// (important when running as an MCP server where stdout is the protocol channel)
 const consoleTransport = new winston.transports.Console({
   format: jsonFormat,
   level: 'debug',
+  stderrLevels: ['error', 'warn', 'info', 'debug', 'verbose', 'silly'],
 });
 
 // Create logger instance (console only, no file logging)
@@ -33,7 +35,7 @@ export const log = {
   error: (message: string, error?: Error | any) => {
     // Errors are always printed
     const errorMeta = error instanceof Error
-      ? { message: error.message, stack: error.stack, ...error }
+      ? { error_message: error.message, stack: error.stack }
       : error;
     logger.error(message, errorMeta);
   },
