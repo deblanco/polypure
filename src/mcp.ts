@@ -17,13 +17,18 @@
  *         "command": "npx",
  *         "args": ["polypure-mcp"],
  *         "env": {
- *           "POLYMARKET_API_KEY": "...",
- *           "POLYMARKET_API_SECRET": "...",
- *           "POLYMARKET_API_PASSPHRASE": "..."
+ *           "POLYMARKET_PRIVATE_KEY": "0x...",
+ *           "POLYMARKET_FUNDER_ADDRESS": "0x...",
+ *           "POLYMARKET_SIGNATURE_TYPE": "1"
  *         }
  *       }
  *     }
  *   }
+ *
+ * Environment Variables:
+ *   POLYMARKET_PRIVATE_KEY     - Your wallet private key (required for trading)
+ *   POLYMARKET_FUNDER_ADDRESS  - Your Polymarket profile address (required for trading)
+ *   POLYMARKET_SIGNATURE_TYPE  - 0 = Browser Wallet, 1 = Magic/Email (default: 1)
  */
 
 // Silence Winston logger BEFORE any imports -- stdout is reserved for MCP protocol.
@@ -34,31 +39,32 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-import { PolymarketClient } from "./client.js";
+import { PolymarketClient, createClientFromPrivateKey } from "./client.js";
 import { getSeries, searchSeries } from "./gamma.js";
 import { getBestPrices, calculateSpread, calculateDepth, isArbitrage } from "./utils/orderbook.js";
 import { VERSION } from "./constants.js";
 
-import type { ClientOptions } from "./types/client.js";
+import type { PrivateKeyConfig } from "./types/client.js";
 
 // ============================================================================
 // Environment & Client Setup
 // ============================================================================
 
 /**
- * Read auth credentials from environment variables.
+ * Read private key credentials from environment variables.
  * Returns null if no credentials are configured (read-only mode).
  */
-function getAuthConfig(): ClientOptions | null {
-  const apiKey = process.env.POLYMARKET_API_KEY;
-  const apiSecret = process.env.POLYMARKET_API_SECRET;
-  const apiPassphrase = process.env.POLYMARKET_API_PASSPHRASE;
+function getPrivateKeyConfig(): PrivateKeyConfig | null {
+  const privateKey = process.env.POLYMARKET_PRIVATE_KEY;
+  const funderAddress = process.env.POLYMARKET_FUNDER_ADDRESS;
 
-  if (!apiKey || !apiSecret || !apiPassphrase) {
+  if (!privateKey || !funderAddress) {
     return null;
   }
 
-  return { apiKey, apiSecret, apiPassphrase };
+  const signatureType = parseInt(process.env.POLYMARKET_SIGNATURE_TYPE || "1") as 0 | 1;
+
+  return { privateKey, funderAddress, signatureType };
 }
 
 /**
@@ -67,8 +73,7 @@ function getAuthConfig(): ClientOptions | null {
 function requireClient(client: PolymarketClient | null): PolymarketClient {
   if (!client) {
     throw new Error(
-      "Authentication required. Set POLYMARKET_API_KEY, POLYMARKET_API_SECRET, " +
-      "and POLYMARKET_API_PASSPHRASE environment variables."
+      "Authentication required. Set POLYMARKET_PRIVATE_KEY and POLYMARKET_FUNDER_ADDRESS environment variables."
     );
   }
   return client;
@@ -93,11 +98,17 @@ function errorResult(error: unknown) {
 // Server Initialization
 // ============================================================================
 
-const authConfig = getAuthConfig();
 let client: PolymarketClient | null = null;
 
-if (authConfig) {
-  client = new PolymarketClient(authConfig);
+/**
+ * Initialize the client from private key config.
+ * Called during server startup.
+ */
+async function initializeClient(): Promise<void> {
+  const config = getPrivateKeyConfig();
+  if (config) {
+    client = await createClientFromPrivateKey(config);
+  }
 }
 
 const server = new McpServer({
@@ -555,6 +566,9 @@ server.tool(
 // ============================================================================
 
 async function main() {
+  // Initialize client from private key (if configured)
+  await initializeClient();
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
 

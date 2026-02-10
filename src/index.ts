@@ -9,12 +9,12 @@
  *
  * @example
  * ```typescript
- * import { PolymarketClient } from "polypure";
+ * import { createClientFromPrivateKey } from "polypure";
  *
- * const client = new PolymarketClient({
- *   apiKey: "...",
- *   apiSecret: "...",
- *   apiPassphrase: "..."
+ * const client = await createClientFromPrivateKey({
+ *   privateKey: process.env.POLYMARKET_PRIVATE_KEY!,
+ *   funderAddress: process.env.POLYMARKET_FUNDER_ADDRESS!,
+ *   signatureType: 1, // 0 = Browser Wallet, 1 = Magic/Email (default)
  * });
  *
  * const market = await client.getMarket("0x...");
@@ -68,7 +68,7 @@ export type {
 } from "./types/earnings.js";
 
 export type {
-  AuthConfig,
+  PrivateKeyConfig,
   ClientOptions,
   RequestOptions,
 } from "./types/client.js";
@@ -94,7 +94,7 @@ export {
 } from "./errors.js";
 
 // ── Client ──────────────────────────────────────────────────────────────────
-export { PolymarketClient } from "./client.js";
+export { PolymarketClient, createClientFromPrivateKey } from "./client.js";
 
 // ── Gamma API (market discovery) ────────────────────────────────────────────
 export {

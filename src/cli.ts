@@ -1,31 +1,38 @@
 #!/usr/bin/env bun
 /**
- * Polylib CLI - Command-line interface for Polymarket trading
+ * Polypure CLI - Command-line interface for Polymarket trading
  *
  * Usage:
- *   bun cli.ts market <conditionId> --key <apiKey> --secret <secret> --pass <passphrase>
- *   bun cli.ts orderbook <marketId> --outcome YES --key ... --secret ... --pass ...
- *   bun cli.ts buy <marketId> --outcome YES --amount 100 --price 0.65 --key ...
- *   bun cli.ts balance --key ... --secret ... --pass ...
+ *   bun cli.ts market <conditionId>
+ *   bun cli.ts orderbook <marketId> --outcome YES
+ *   bun cli.ts buy <marketId> --outcome YES --amount 100 --price 0.65
+ *   bun cli.ts balance
  *
  * Environment variables:
- *   POLY_API_KEY, POLY_API_SECRET, POLY_API_PASSPHRASE, POLY_PRIVATE_KEY
+ *   POLYMARKET_PRIVATE_KEY     - Your wallet private key (required)
+ *   POLYMARKET_FUNDER_ADDRESS  - Your Polymarket profile address (required)
+ *   POLYMARKET_SIGNATURE_TYPE  - 0 = Browser Wallet, 1 = Magic/Email (default: 1)
  */
 
-import { log, logger } from "./logger.js";
+import { log } from "./logger.js";
 import {
+  createClientFromPrivateKey,
   PolymarketClient,
+} from "./client.js";
+import {
   getSeries,
   searchSeries,
+} from "./gamma.js";
+import {
   getBestPrices,
   calculateSpread,
   calculateDepth,
   isArbitrage,
+} from "./utils/orderbook.js";
+import {
   normalizeOrder,
-  type OrderRequest,
-  type OrderSide,
-  type OrderType,
-} from "./index.js";
+} from "./utils/order.js";
+import type { OrderRequest, OrderSide, OrderType } from "./types/order.js";
 
 // ============================================================================
 // CLI Types
@@ -42,14 +49,9 @@ type Command =
   | "portfolio" | "profile" | "profile-stats"
   | "user-trades"
   | "series" | "find"
-  | "derive"
   | "help";
 
 interface CliOptions {
-  key?: string;
-  secret?: string;
-  pass?: string;
-  passphrase?: string;
   outcome?: string;
   tokenId?: string;
   amount?: number;
@@ -60,9 +62,6 @@ interface CliOptions {
   position?: string;
   noCompetition?: boolean;
   address?: string;
-  proxy?: string;
-  rpc?: string;
-  funder?: string;
   json?: boolean;
   raw?: boolean;
 }
@@ -80,23 +79,6 @@ function parseArgs(args: string[]): { command: Command; args: string[]; options:
     const next = args[i + 1];
 
     switch (arg) {
-      case "--key":
-      case "-k":
-        options.key = next;
-        i++;
-        break;
-      case "--secret":
-      case "-s":
-        options.secret = next;
-        i++;
-        break;
-      case "--pass":
-      case "--passphrase":
-      case "-p":
-        options.pass = next;
-        options.passphrase = next;
-        i++;
-        break;
       case "--outcome":
       case "-o":
         options.outcome = next;
@@ -141,18 +123,6 @@ function parseArgs(args: string[]): { command: Command; args: string[]; options:
         options.address = next;
         i++;
         break;
-      case "--proxy":
-        options.proxy = next;
-        i++;
-        break;
-      case "--rpc":
-        options.rpc = next;
-        i++;
-        break;
-      case "--funder":
-        options.funder = next;
-        i++;
-        break;
       case "--json":
       case "-j":
         options.json = true;
@@ -180,25 +150,24 @@ function parseArgs(args: string[]): { command: Command; args: string[]; options:
 // Client Factory
 // ============================================================================
 
-function createClient(options: CliOptions): PolymarketClient {
-  const apiKey = options.key || process.env.POLY_API_KEY;
-  const apiSecret = options.secret || process.env.POLY_API_SECRET;
-  const apiPassphrase = options.pass || options.passphrase || process.env.POLY_API_PASSPHRASE;
+async function createClient(): Promise<PolymarketClient> {
+  const privateKey = process.env.POLYMARKET_PRIVATE_KEY;
+  const funderAddress = process.env.POLYMARKET_FUNDER_ADDRESS;
+  const signatureType = parseInt(process.env.POLYMARKET_SIGNATURE_TYPE || "1") as 0 | 1;
 
-  if (!apiKey || !apiSecret || !apiPassphrase) {
+  if (!privateKey || !funderAddress) {
     throw new Error(
-      "Missing API credentials. Provide --key, --secret, --pass or set " +
-      "POLY_API_KEY, POLY_API_SECRET, POLY_API_PASSPHRASE env vars"
+      "Missing credentials. Set POLYMARKET_PRIVATE_KEY and POLYMARKET_FUNDER_ADDRESS environment variables.\n\n" +
+      "POLYMARKET_PRIVATE_KEY     - Your wallet private key (hex)\n" +
+      "POLYMARKET_FUNDER_ADDRESS  - Your Polymarket profile address\n" +
+      "POLYMARKET_SIGNATURE_TYPE  - 0 = Browser Wallet, 1 = Magic/Email (default: 1)"
     );
   }
 
-  return new PolymarketClient({
-    apiKey,
-    apiSecret,
-    apiPassphrase,
-    proxyAddress: options.proxy,
-    rpcUrl: options.rpc,
-    funderAddress: options.funder,
+  return createClientFromPrivateKey({
+    privateKey,
+    funderAddress,
+    signatureType,
   });
 }
 
@@ -290,7 +259,7 @@ function formatOrder(order: any): string {
 // ============================================================================
 
 async function cmdMarket(args: string[], options: CliOptions): Promise<void> {
-  const client = createClient(options);
+  const client = await createClient();
   const conditionId = args[0];
 
   if (!conditionId) {
@@ -308,7 +277,7 @@ async function cmdMarket(args: string[], options: CliOptions): Promise<void> {
 }
 
 async function cmdMarkets(args: string[], options: CliOptions): Promise<void> {
-  const client = createClient(options);
+  const client = await createClient();
   const markets = await client.getMarkets();
   const limit = options.limit || 20;
 
@@ -324,7 +293,7 @@ async function cmdMarkets(args: string[], options: CliOptions): Promise<void> {
 }
 
 async function cmdSearch(args: string[], options: CliOptions): Promise<void> {
-  const client = createClient(options);
+  const client = await createClient();
   const query = args.join(" ");
 
   if (!query) {
@@ -346,7 +315,7 @@ async function cmdSearch(args: string[], options: CliOptions): Promise<void> {
 }
 
 async function cmdOrderbook(args: string[], options: CliOptions): Promise<void> {
-  const client = createClient(options);
+  const client = await createClient();
   const marketId = args[0];
 
   if (!marketId) {
@@ -369,7 +338,7 @@ async function cmdOrderbook(args: string[], options: CliOptions): Promise<void> 
 }
 
 async function cmdPlaceOrder(side: OrderSide, args: string[], options: CliOptions): Promise<void> {
-  const client = createClient(options);
+  const client = await createClient();
   const marketId = args[0];
 
   if (!marketId || !options.amount || !options.price) {
@@ -402,7 +371,7 @@ async function cmdPlaceOrder(side: OrderSide, args: string[], options: CliOption
 }
 
 async function cmdCancel(args: string[], options: CliOptions): Promise<void> {
-  const client = createClient(options);
+  const client = await createClient();
   const orderId = args[0];
 
   if (!orderId) {
@@ -415,7 +384,7 @@ async function cmdCancel(args: string[], options: CliOptions): Promise<void> {
 }
 
 async function cmdOrders(args: string[], options: CliOptions): Promise<void> {
-  const client = createClient(options);
+  const client = await createClient();
   const orders = await client.getOrders();
 
   if (options.json) {
@@ -430,7 +399,7 @@ async function cmdOrders(args: string[], options: CliOptions): Promise<void> {
 }
 
 async function cmdBalance(args: string[], options: CliOptions): Promise<void> {
-  const client = createClient(options);
+  const client = await createClient();
   const balance = await client.getUSDCBalance();
 
   if (options.json) {
@@ -441,13 +410,13 @@ async function cmdBalance(args: string[], options: CliOptions): Promise<void> {
 }
 
 async function cmdAllowance(args: string[], options: CliOptions): Promise<void> {
-  const client = createClient(options);
+  const client = await createClient();
   await client.updateAllowance();
   console.log("✓ Allowance updated");
 }
 
 async function cmdTrades(args: string[], options: CliOptions): Promise<void> {
-  const client = createClient(options);
+  const client = await createClient();
   const trades = await client.getTrades();
 
   if (options.json) {
@@ -526,24 +495,8 @@ async function cmdFind(args: string[], options: CliOptions): Promise<void> {
   }
 }
 
-async function cmdDerive(args: string[], options: CliOptions): Promise<void> {
-  const client = createClient(options);
-  const derived = await client.deriveApiKey();
-
-  if (options.json) {
-    output(derived, options);
-  } else {
-    console.log([
-      "🔑 Derived API Key:",
-      `   Key: ${derived.apiKey}`,
-      `   Secret: ${derived.apiSecret.slice(0, 10)}...`,
-      `   Passphrase: ${derived.apiPassphrase}`,
-    ].join("\n"));
-  }
-}
-
 async function cmdEarnings(args: string[], options: CliOptions): Promise<void> {
-  const client = createClient(options);
+  const client = await createClient();
   const date = args[0] || new Date().toISOString().split('T')[0];
 
   const earnings = await client.getUserEarnings(date);
@@ -564,7 +517,7 @@ async function cmdEarnings(args: string[], options: CliOptions): Promise<void> {
 }
 
 async function cmdTotalEarnings(args: string[], options: CliOptions): Promise<void> {
-  const client = createClient(options);
+  const client = await createClient();
   const date = args[0] || new Date().toISOString().split('T')[0];
 
   const earnings = await client.getTotalUserEarnings(date);
@@ -583,7 +536,7 @@ async function cmdTotalEarnings(args: string[], options: CliOptions): Promise<vo
 }
 
 async function cmdRewards(args: string[], options: CliOptions): Promise<void> {
-  const client = createClient(options);
+  const client = await createClient();
   const date = args[0] || new Date().toISOString().split('T')[0];
 
   const rewards = await client.getUserRewardsEarnings(date, {
@@ -622,7 +575,7 @@ async function cmdRewards(args: string[], options: CliOptions): Promise<void> {
 // ============================================================================
 
 async function cmdPositions(args: string[], options: CliOptions): Promise<void> {
-  const client = createClient(options);
+  const client = await createClient();
   const positions = await client.getCurrentPositions({
     next_cursor: undefined,
     limit: options.limit,
@@ -652,12 +605,12 @@ async function cmdPositions(args: string[], options: CliOptions): Promise<void> 
 }
 
 async function cmdUserPositions(args: string[], options: CliOptions): Promise<void> {
-  const client = createClient(options);
+  const client = await createClient();
   const address = options.address || args[0];
 
   if (!address) {
-    console.error("Usage: cli.ts user-positions <address> --key ... --secret ... --pass ...");
-    console.error("   or: cli.ts user-positions --address 0xabc... --key ...");
+    console.error("Usage: cli.ts user-positions <address>");
+    console.error("   or: cli.ts user-positions --address 0xabc...");
     process.exit(1);
   }
 
@@ -684,7 +637,7 @@ async function cmdUserPositions(args: string[], options: CliOptions): Promise<vo
 }
 
 async function cmdMarketPositions(args: string[], options: CliOptions): Promise<void> {
-  const client = createClient(options);
+  const client = await createClient();
   const conditionId = args[0];
 
   if (!conditionId) {
@@ -728,7 +681,7 @@ async function cmdMarketPositions(args: string[], options: CliOptions): Promise<
 // ============================================================================
 
 async function cmdPortfolio(args: string[], options: CliOptions): Promise<void> {
-  const client = createClient(options);
+  const client = await createClient();
   const portfolio = await client.getPortfolio(options.address);
 
   if (options.json) {
@@ -758,12 +711,12 @@ async function cmdPortfolio(args: string[], options: CliOptions): Promise<void> 
 }
 
 async function cmdProfile(args: string[], options: CliOptions): Promise<void> {
-  const client = createClient(options);
+  const client = await createClient();
   const address = args[0] || options.address;
 
   if (!address) {
-    console.error("Usage: cli.ts profile <address> --key ... --secret ... --pass ...");
-    console.error("   or: cli.ts profile --address 0xabc... --key ...");
+    console.error("Usage: cli.ts profile <address>");
+    console.error("   or: cli.ts profile --address 0xabc...");
     process.exit(1);
   }
 
@@ -790,12 +743,12 @@ async function cmdProfile(args: string[], options: CliOptions): Promise<void> {
 }
 
 async function cmdProfileStats(args: string[], options: CliOptions): Promise<void> {
-  const client = createClient(options);
+  const client = await createClient();
   const address = args[0] || options.address;
 
   if (!address) {
-    console.error("Usage: cli.ts profile-stats <address> --key ... --secret ... --pass ...");
-    console.error("   or: cli.ts profile-stats --address 0xabc... --key ...");
+    console.error("Usage: cli.ts profile-stats <address>");
+    console.error("   or: cli.ts profile-stats --address 0xabc...");
     process.exit(1);
   }
 
@@ -815,12 +768,12 @@ async function cmdProfileStats(args: string[], options: CliOptions): Promise<voi
 }
 
 async function cmdUserTrades(args: string[], options: CliOptions): Promise<void> {
-  const client = createClient(options);
+  const client = await createClient();
   const address = options.address || args[0];
 
   if (!address) {
-    console.error("Usage: cli.ts user-trades <address> --key ... --secret ... --pass ...");
-    console.error("   or: cli.ts user-trades --address 0xabc... --key ...");
+    console.error("Usage: cli.ts user-trades <address>");
+    console.error("   or: cli.ts user-trades --address 0xabc...");
     process.exit(1);
   }
 
@@ -852,9 +805,14 @@ async function cmdUserTrades(args: string[], options: CliOptions): Promise<void>
 
 function cmdHelp(): void {
   console.log(`
-📈 Polypure CLI - Polymarket Trading Tool
+Polypure CLI - Polymarket Trading Tool
 
 Usage: bun cli.ts <command> [args] [options]
+
+Environment Variables (required):
+  POLYMARKET_PRIVATE_KEY     Your wallet private key (hex)
+  POLYMARKET_FUNDER_ADDRESS  Your Polymarket profile address
+  POLYMARKET_SIGNATURE_TYPE  0 = Browser Wallet, 1 = Magic/Email (default: 1)
 
 Commands:
   market <id>              Get market by condition ID
@@ -884,16 +842,12 @@ Commands:
   user-trades <address>    Get trades for a wallet address
 
   Discovery:
-  series <slug>            Get series by slug
-  find <query>             Search for series
-  derive                   Derive API key from signer
+  series <slug>            Get series by slug (no auth required)
+  find <query>             Search for series (no auth required)
 
   help                     Show this help
 
 Options:
-  --key, -k <key>          API key (or POLY_API_KEY env)
-  --secret, -s <secret>    API secret (or POLY_API_SECRET env)
-  --pass, -p <pass>        API passphrase (or POLY_API_PASSPHRASE env)
   --outcome, -o <out>      Outcome name (YES, NO, etc.)
   --tokenId, -t <id>       Token ID (alternative to outcome)
   --amount, -a <n>         Order amount in shares
@@ -904,40 +858,41 @@ Options:
   --position <pos>         Filter rewards by position (maker, taker)
   --no-competition         Exclude competition rewards
   --address <addr>         Wallet address for profile queries
-  --proxy <addr>           Gnosis Safe proxy address
-  --rpc <url>              Polygon RPC URL
-  --funder <addr>          Funder address
   --json, -j               Output JSON
   --raw, -r                Output raw JSON
   --help, -h               Show help
 
 Examples:
+  # First, set your credentials:
+  export POLYMARKET_PRIVATE_KEY="0x..."
+  export POLYMARKET_FUNDER_ADDRESS="0x..."
+
   # Market data
-  bun cli.ts market 0xabc123... -k KEY -s SECRET -p PASS
-  bun cli.ts orderbook 0xabc... --outcome YES -k KEY -s SECRET -p PASS
+  bun cli.ts market 0xabc123...
+  bun cli.ts orderbook 0xabc... --outcome YES
 
   # Trading
-  bun cli.ts buy 0xabc... -a 100 --price 0.65 -o YES -k KEY -s SECRET -p PASS
-  bun cli.ts sell 0xabc... -a 50 --price 0.70 -o YES -k KEY -s SECRET -p PASS
-  bun cli.ts cancel 0xorder... -k KEY -s SECRET -p PASS
+  bun cli.ts buy 0xabc... -a 100 --price 0.65 -o YES
+  bun cli.ts sell 0xabc... -a 50 --price 0.70 -o YES
+  bun cli.ts cancel 0xorder...
 
   # Account
-  bun cli.ts balance -k KEY -s SECRET -p PASS
-  bun cli.ts positions -k KEY -s SECRET -p PASS
-  bun cli.ts portfolio -k KEY -s SECRET -p PASS
+  bun cli.ts balance
+  bun cli.ts positions
+  bun cli.ts portfolio
 
   # Other profiles
-  bun cli.ts user-positions 0xabc123... -k KEY -s SECRET -p PASS
-  bun cli.ts profile 0xabc123... -k KEY -s SECRET -p PASS
-  bun cli.ts profile-stats 0xabc123... -k KEY -s SECRET -p PASS
-  bun cli.ts user-trades 0xabc123... -l 20 -k KEY -s SECRET -p PASS
-  bun cli.ts portfolio --address 0xabc123... -k KEY -s SECRET -p PASS
+  bun cli.ts user-positions 0xabc123...
+  bun cli.ts profile 0xabc123...
+  bun cli.ts profile-stats 0xabc123...
+  bun cli.ts user-trades 0xabc123... -l 20
+  bun cli.ts portfolio --address 0xabc123...
 
   # Earnings
-  bun cli.ts earnings 2024-01-15 -k KEY -s SECRET -p PASS
-  bun cli.ts rewards 2024-01-15 --order-by volume -k KEY -s SECRET -p PASS
+  bun cli.ts earnings 2024-01-15
+  bun cli.ts rewards 2024-01-15 --order-by volume
 
-  # Discovery
+  # Discovery (no auth required)
   bun cli.ts series highest-temperature-in-london-on-february-3-2026
   bun cli.ts find "bitcoin price" -l 5
 `);
@@ -993,9 +948,6 @@ async function main(): Promise<void> {
         break;
       case "find":
         await cmdFind(args, options);
-        break;
-      case "derive":
-        await cmdDerive(args, options);
         break;
       case "earnings":
         await cmdEarnings(args, options);

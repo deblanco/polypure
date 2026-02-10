@@ -50,7 +50,7 @@ export type {
 } from "./earnings.js";
 
 export type {
-  AuthConfig,
+  PrivateKeyConfig,
   ClientOptions,
   RequestOptions,
 } from "./client.js";

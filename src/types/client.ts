@@ -5,18 +5,36 @@
  * and internal HTTP request shapes.
  */
 
-/** API authentication credentials. */
-export interface AuthConfig {
+/**
+ * Private key authentication config.
+ *
+ * API credentials (key, secret, passphrase) are derived automatically
+ * at runtime using `createOrDeriveApiKey()`.
+ */
+export interface PrivateKeyConfig {
+  /** Wallet private key (hex string, with or without 0x prefix). */
+  privateKey: string;
+
+  /** Polymarket profile address (where you send USDC to fund your account). */
+  funderAddress: string;
+
+  /**
+   * Signature type for order signing.
+   * - 0 = Browser Wallet (MetaMask, Coinbase Wallet, etc.)
+   * - 1 = Magic/Email Login (default)
+   */
+  signatureType?: 0 | 1;
+}
+
+/**
+ * Internal client options used after credential derivation.
+ * Not part of the public API.
+ */
+export interface ClientOptions {
   apiKey: string;
   apiSecret: string;
   apiPassphrase: string;
-  proxyAddress?: string;
-}
-
-/** Full configuration options for PolymarketClient. */
-export interface ClientOptions extends AuthConfig {
   signer?: any;
-  rpcUrl?: string;
   signatureType?: number;
   funderAddress?: string;
   baseUrl?: string;

@@ -6,13 +6,10 @@
  *
  * @example
  * ```typescript
- * import { PolymarketClient } from "polypure";
+ * import { createClient } from "polypure";
  *
- * const client = new PolymarketClient({
- *   apiKey: "...",
- *   apiSecret: "...",
- *   apiPassphrase: "..."
- * });
+ * // Set env vars: POLYMARKET_PRIVATE_KEY, POLYMARKET_FUNDER_ADDRESS
+ * const client = await createClient();
  *
  * const market = await client.getMarket("0x...");
  * const orderbook = await client.getOrderbook(market.market_id, "YES");
@@ -26,13 +23,15 @@ import {
   Side as ClobSide,
   AssetType,
 } from "@polymarket/clob-client";
+import { Wallet } from "@ethersproject/wallet";
+import { LRUCache } from "lru-cache";
 
 import { log } from "./logger.js";
 import { POLYMARKET_CLOB_HOST } from "./constants.js";
 import { PolymarketError, ValidationError } from "./errors.js";
 import { getBestPrices } from "./utils/orderbook.js";
 
-import type { ClientOptions, AuthConfig } from "./types/client.js";
+import type { ClientOptions, PrivateKeyConfig } from "./types/client.js";
 import type { Market } from "./types/market.js";
 import type { Orderbook } from "./types/orderbook.js";
 import type { OrderRequest, OrderResponse, OrderSide } from "./types/order.js";
@@ -42,14 +41,109 @@ import type { BalanceAllowance } from "./types/earnings.js";
 import type { UserEarning, TotalUserEarning, UserRewardsEarning } from "./types/earnings.js";
 import type { UserProfile, ProfileStats, UserPortfolio } from "./types/profile.js";
 
+// ============================================================================
+// Credentials Cache
+// ============================================================================
+
+/** Cached API credentials from createOrDeriveApiKey(). */
+interface CachedCredentials {
+  key: string;
+  secret: string;
+  passphrase: string;
+}
+
+/**
+ * LRU cache for derived API credentials.
+ * - Max 10 entries (supports multiple wallets)
+ * - 1 minute TTL (credentials are re-derived after expiry)
+ * - Keyed by wallet address
+ */
+const credentialsCache = new LRUCache<string, CachedCredentials>({
+  max: 10,
+  ttl: 60_000, // 1 minute
+});
+
+// ============================================================================
+// Client Factory
+// ============================================================================
+
+/**
+ * Create a PolymarketClient from a private key configuration.
+ *
+ * API credentials (key, secret, passphrase) are derived automatically
+ * using `createOrDeriveApiKey()` and cached for 1 minute.
+ *
+ * @param config - Private key configuration.
+ * @returns Configured PolymarketClient instance.
+ *
+ * @example
+ * ```typescript
+ * const client = await createClientFromPrivateKey({
+ *   privateKey: "0x...",
+ *   funderAddress: "0x...",
+ *   signatureType: 1, // Magic/Email login (default)
+ * });
+ * ```
+ */
+export async function createClientFromPrivateKey(
+  config: PrivateKeyConfig
+): Promise<PolymarketClient> {
+  const signer = new Wallet(config.privateKey);
+  const address = await signer.getAddress();
+  const signatureType = config.signatureType ?? 1; // Default: Magic/Email
+
+  log.debug("Creating client from private key", {
+    address,
+    funderAddress: config.funderAddress,
+    signatureType,
+  });
+
+  // Check cache first
+  let creds = credentialsCache.get(address);
+
+  if (!creds) {
+    log.debug("Deriving API credentials (not cached)", { address });
+
+    // Create temporary client to derive credentials
+    const tempClient = new ClobClient(
+      POLYMARKET_CLOB_HOST,
+      Chain.POLYGON,
+      signer
+    );
+
+    const derived = await tempClient.createOrDeriveApiKey();
+    creds = {
+      key: derived.key,
+      secret: derived.secret,
+      passphrase: derived.passphrase,
+    };
+
+    credentialsCache.set(address, creds);
+    log.debug("API credentials cached", { address });
+  } else {
+    log.debug("Using cached API credentials", { address });
+  }
+
+  return new PolymarketClient({
+    apiKey: creds.key,
+    apiSecret: creds.secret,
+    apiPassphrase: creds.passphrase,
+    signer,
+    funderAddress: config.funderAddress,
+    signatureType,
+  });
+}
+
+// ============================================================================
+// PolymarketClient
+// ============================================================================
+
 export class PolymarketClient {
   private sdk: ClobClient;
   private signer?: any;
   private baseUrl: string;
-  private auth: AuthConfig;
 
   constructor(options: ClientOptions) {
-    this.auth = options;
     this.signer = options.signer;
     this.baseUrl = options.baseUrl || POLYMARKET_CLOB_HOST;
 
@@ -879,21 +973,4 @@ export class PolymarketClient {
     throw new PolymarketError("Signer required for default address", "NO_SIGNER");
   }
 
-  // ========================================================================
-  // Authentication
-  // ========================================================================
-
-  /**
-   * Derive a new API key from the configured signer.
-   *
-   * @returns Fresh API credentials (key, secret, passphrase).
-   */
-  async deriveApiKey(): Promise<AuthConfig> {
-    const derived = await this.sdk.deriveApiKey();
-    return {
-      apiKey: derived.key,
-      apiSecret: derived.secret,
-      apiPassphrase: derived.passphrase,
-    };
-  }
 }
