@@ -56,6 +56,8 @@ export async function searchSeries(
     search: query,
     limit: String(limit),
     closed: "false",
+    order: "createdAt",
+    ascending: "false",
   });
 
   if (active) params.set("active", "true");
