@@ -20,6 +20,8 @@ export interface Trade {
   outcome: string;
   transaction_hash: string;
   trader_side: "TAKER" | "MAKER";
+  /** Market title from Data API */
+  title?: string;
 }
 
 /** Options for querying user trades. */

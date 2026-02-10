@@ -787,7 +787,8 @@ async function cmdProfile(args: string[], options: CliOptions): Promise<void> {
 }
 
 async function cmdProfileStats(args: string[], options: CliOptions): Promise<void> {
-  const client = await createClient(options);
+  // Use read-only client - getAllUserTrades now uses Data API
+  const client = createReadOnlyClient();
   const address = args[0] || options.address;
 
   if (!address) {
@@ -839,10 +840,11 @@ async function cmdUserTrades(args: string[], options: CliOptions): Promise<void>
     for (const trade of trades.trades) {
       const icon = trade.side === "BUY" ? "🟢" : "🔴";
       const date = new Date(trade.match_time).toLocaleDateString();
-      console.log(`\n   ${icon} ${(trade as any).question || trade.market}`);
-      console.log(`      ${trade.side} ${trade.size} @ ${trade.price}`);
+      const displayTitle = trade.title || trade.market;
+      console.log(`\n   ${icon} ${displayTitle.length > 60 ? displayTitle.substring(0, 60) + "..." : displayTitle}`);
+      console.log(`      ${trade.side} ${trade.size} @ ${Number(trade.price).toFixed(4)}`);
       console.log(`      Date: ${date}`);
-      console.log(`      Side: ${trade.trader_side}`);
+      console.log(`      Outcome: ${trade.outcome || "Unknown"}`);
     }
   }
 }

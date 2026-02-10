@@ -800,46 +800,60 @@ export class PolymarketClient {
   /**
    * Get trades for a specific user address.
    *
+   * Uses the Data API for public trade history.
+   *
    * @param options - Optional filters (address, asset_id, market) and pagination.
    * @returns Paginated trade response.
    */
   async getUserTrades(options?: UserTradesOptions): Promise<UserTradesResponse> {
-    const params: { maker_address?: string; asset_id?: string; market?: string } = {};
-    if (options?.address) params.maker_address = options.address;
-    if (options?.asset_id) params.asset_id = options.asset_id;
-    if (options?.market) params.market = options.market;
+    const targetAddress = options?.address || (await this.getSignerAddress());
+    const params = new URLSearchParams();
+    params.set("user", targetAddress);
+    if (options?.asset_id) params.set("asset", options.asset_id);
+    if (options?.market) params.set("conditionId", options.market);
+    if (options?.limit) params.set("limit", String(options.limit));
 
-    const response = await this.sdk.getTrades(params);
-    const trades = (response as any)?.data ?? (response as any)?.trades ?? response ?? [];
+    const url = `${DATA_API_BASE}/trades?${params}`;
+    const response = await httpRequest<any[]>(url);
+    const trades = (response ?? []).map((t) => this.normalizeTrade(t));
 
     return {
       trades,
-      next_cursor: (response as any)?.next_cursor,
-      count: (response as any)?.count,
+      next_cursor: undefined, // Data API doesn't use cursor pagination for trades
+      count: trades.length,
     };
   }
 
   /**
-   * Get all trades for a user address (auto-paginated).
-   * Fetches every page until no more cursors remain.
+   * Get all trades for a user address.
+   * Uses the Data API which returns all trades in a single request.
    *
    * @param address - Wallet address to query.
-   * @returns All trades across all pages.
+   * @returns All trades.
    */
   async getAllUserTrades(address: string): Promise<Trade[]> {
-    const allTrades: Trade[] = [];
-    let nextCursor: string | undefined;
+    const response = await this.getUserTrades({ address });
+    return response.trades;
+  }
 
-    do {
-      const response = await this.sdk.getTradesPaginated(
-        { maker_address: address },
-        nextCursor
-      );
-      allTrades.push(...response.trades);
-      nextCursor = response.next_cursor;
-    } while (nextCursor);
-
-    return allTrades;
+  /**
+   * Normalise raw trade data from Data API to Trade shape.
+   */
+  private normalizeTrade(trade: any): Trade {
+    return {
+      id: trade.transactionHash || trade.id,
+      market: trade.conditionId || trade.market,
+      asset_id: trade.asset || trade.asset_id,
+      side: (trade.side as OrderSide) || "BUY",
+      size: String(trade.size ?? "0"),
+      price: String(trade.price ?? "0"),
+      status: "FILLED",
+      match_time: trade.timestamp ? new Date(trade.timestamp * 1000).toISOString() : new Date().toISOString(),
+      outcome: trade.outcome || "",
+      transaction_hash: trade.transactionHash || "",
+      trader_side: "TAKER", // Data API doesn't provide this, default to TAKER
+      title: trade.title,
+    };
   }
 
   /**
