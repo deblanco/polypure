@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/deblanco/polypure/compare/v1.3.0...v1.4.0) (2026-02-10)
+
+
+### Features
+
+* implement read-only client for public data access in CLI commands ([6b42e2e](https://github.com/deblanco/polypure/commit/6b42e2eda7ac3bee054e42de4690a3410f454c41))
+
 # [1.3.0](https://github.com/deblanco/polypure/compare/v1.2.0...v1.3.0) (2026-02-10)
 
 
