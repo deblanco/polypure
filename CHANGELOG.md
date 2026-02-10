@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/deblanco/polypure/compare/v1.2.0...v1.3.0) (2026-02-10)
+
+
+### Features
+
+* add read-only client for public data access and update position handling ([754f8aa](https://github.com/deblanco/polypure/commit/754f8aa37617c09fbf33976170896c75a4b3d908))
+
 # [1.2.0](https://github.com/deblanco/polypure/compare/v1.1.0...v1.2.0) (2026-02-10)
 
 
