@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/deblanco/polypure/compare/v1.1.0...v1.2.0) (2026-02-10)
+
+
+### Features
+
+* update MCP server and CLI to use private key authentication for Polymarket ([81ee212](https://github.com/deblanco/polypure/commit/81ee212934b2543792a438b42622d21035baab4b))
+
 # [1.1.0](https://github.com/deblanco/polypure/compare/v1.0.0...v1.1.0) (2026-02-10)
 
 
