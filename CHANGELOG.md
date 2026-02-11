@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/deblanco/polypure/compare/v1.6.0...v1.7.0) (2026-02-11)
+
+
+### Features
+
+* **order-builder:** implement order building and signing functionality ([9741261](https://github.com/deblanco/polypure/commit/9741261a70ad69fbc6fef9fb25e10fb33ce8e4ec))
+
 # [1.6.0](https://github.com/deblanco/polypure/compare/v1.5.0...v1.6.0) (2026-02-11)
 
 
