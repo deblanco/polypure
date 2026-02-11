@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/deblanco/polypure/compare/v1.4.1...v1.5.0) (2026-02-10)
+
+
+### Features
+
+* integrate Data API for user trades and enhance trade data structure ([075869c](https://github.com/deblanco/polypure/commit/075869c5fe47e5637ccb9f8b308c75efa317c3cc))
+
 ## [1.4.1](https://github.com/deblanco/polypure/compare/v1.4.0...v1.4.1) (2026-02-10)
 
 
