@@ -12,6 +12,48 @@ bun add polypure
 npm install polypure
 ```
 
+## Browser Compatibility
+
+Polypure works in both Node.js and browser environments.
+
+### Node.js (Full Functionality)
+
+```typescript
+import { createClientFromPrivateKey, getSeries } from "polypure";
+
+// Full SDK with trading, orders, authentication
+const client = await createClientFromPrivateKey({
+  privateKey: process.env.POLYMARKET_PRIVATE_KEY!,
+  funderAddress: process.env.POLYMARKET_FUNDER_ADDRESS!,
+});
+```
+
+### Browser (Read-Only Market Data)
+
+For browser environments, use the browser-specific export to avoid Node.js-only dependencies:
+
+```typescript
+// Import the browser-compatible version
+import { getSeries, searchSeries } from "polypure/browser";
+
+// Market discovery works in browsers
+const series = await getSeries("highest-temperature-in-london-on-february-3-2026");
+console.log(series?.title);
+```
+
+**Note:** The browser build excludes authenticated features (placing orders, portfolio management) that require Node.js-specific dependencies like `@polymarket/clob-client`. For trading functionality, use the Node.js build.
+
+**Bundler Configuration:**
+
+Most modern bundlers (Vite, Webpack, Rollup) will automatically resolve the browser export when importing from `"polypure"`:
+
+```typescript
+// Bundlers will auto-resolve to browser build
+import { getSeries } from "polypure";
+```
+
+If your bundler doesn't support conditional exports, import explicitly from `"polypure/browser"`.
+
 ## MCP Server (AI Agent Integration)
 
 Polypure includes an [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server that lets AI agents like Claude interact with Polymarket directly. 19 tools covering market discovery, orderbook analysis, portfolio tracking, and trading.
