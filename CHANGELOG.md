@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/deblanco/polypure/compare/v1.5.0...v1.6.0) (2026-02-11)
+
+
+### Features
+
+* add browser compatibility and logging support to Polypure SDK ([a56d0a9](https://github.com/deblanco/polypure/commit/a56d0a968f80baa70bb3abbe0045acdec89890b8))
+
 # [1.5.0](https://github.com/deblanco/polypure/compare/v1.4.1...v1.5.0) (2026-02-10)
 
 
