@@ -1,8 +1,8 @@
 /**
  * PolymarketClient - Main SDK client for interacting with the Polymarket CLOB API.
  *
- * Wraps the @polymarket/clob-client with a cleaner, typed interface covering
- * markets, orderbooks, orders, trades, positions, profiles, and earnings.
+ * A universal client that works in both browser and Node.js environments.
+ * Uses native fetch, Web Crypto API, and viem for signing.
  *
  * @example
  * ```typescript
@@ -16,14 +16,8 @@
  * ```
  */
 
-import {
-  ClobClient,
-  Chain,
-  OrderType as ClobOrderType,
-  Side as ClobSide,
-  AssetType,
-} from "@polymarket/clob-client";
-import { Wallet } from "@ethersproject/wallet";
+import type { PrivateKeyAccount, WalletClient } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { LRUCache } from "lru-cache";
 
 import { log } from "./logger.js";
@@ -31,6 +25,8 @@ import { POLYMARKET_CLOB_HOST, DATA_API_BASE } from "./constants.js";
 import { PolymarketError, ValidationError } from "./errors.js";
 import { httpRequest } from "./http.js";
 import { getBestPrices } from "./utils/orderbook.js";
+import { createOrDeriveApiKey, createL2Headers, type ApiCredentials } from "./auth/index.js";
+import { buildSignedOrder, type SignedOrder } from "./order-builder/index.js";
 
 import type { ClientOptions, PrivateKeyConfig } from "./types/client.js";
 import type { Market } from "./types/market.js";
@@ -89,8 +85,8 @@ const credentialsCache = new LRUCache<string, CachedCredentials>({
 export async function createClientFromPrivateKey(
   config: PrivateKeyConfig
 ): Promise<PolymarketClient> {
-  const signer = new Wallet(config.privateKey);
-  const address = await signer.getAddress();
+  const account = privateKeyToAccount(config.privateKey);
+  const address = account.address;
   const signatureType = config.signatureType ?? 1; // Default: Magic/Email
 
   log.debug("Creating client from private key", {
@@ -105,16 +101,7 @@ export async function createClientFromPrivateKey(
   if (!creds) {
     log.debug("Deriving API credentials (not cached)", { address });
 
-    // Create temporary client to derive credentials
-    const tempClient = new ClobClient(
-      POLYMARKET_CLOB_HOST,
-      Chain.POLYGON,
-      signer
-    );
-
-    // Use deriveApiKey directly to avoid "Could not create api key" error message
-    // that occurs when trying createOrDeriveApiKey (it tries create first, then derive)
-    const derived = await tempClient.deriveApiKey();
+    const derived = await createOrDeriveApiKey(POLYMARKET_CLOB_HOST, account);
     creds = {
       key: derived.key,
       secret: derived.secret,
@@ -131,7 +118,7 @@ export async function createClientFromPrivateKey(
     apiKey: creds.key,
     apiSecret: creds.secret,
     apiPassphrase: creds.passphrase,
-    signer,
+    signer: account,
     funderAddress: config.funderAddress,
     signatureType,
   });
@@ -166,32 +153,28 @@ export function createReadOnlyClient(): PolymarketClient {
 // ============================================================================
 
 export class PolymarketClient {
-  private sdk: ClobClient;
-  private signer?: any;
+  private creds?: ApiCredentials;
+  private signer?: PrivateKeyAccount | WalletClient;
   private baseUrl: string;
   private isReadOnly: boolean;
+  private signatureType: number;
+  private funderAddress?: string;
 
   constructor(options: ClientOptions = {}) {
-    this.signer = options.signer;
     this.baseUrl = options.baseUrl || POLYMARKET_CLOB_HOST;
     this.isReadOnly = !options.apiKey;
+    this.signatureType = options.signatureType ?? 1;
+    this.funderAddress = options.funderAddress;
 
-    // Only create full ClobClient if we have credentials
-    // Read-only clients can still access public endpoints via httpRequest
-    this.sdk = new ClobClient(
-      this.baseUrl,
-      Chain.POLYGON,
-      options.signer,
-      options.apiKey
-        ? {
-            key: options.apiKey,
-            secret: options.apiSecret!,
-            passphrase: options.apiPassphrase!,
-          }
-        : undefined,
-      options.signatureType,
-      options.funderAddress
-    );
+    if (options.apiKey && options.apiSecret && options.apiPassphrase) {
+      this.creds = {
+        key: options.apiKey,
+        secret: options.apiSecret,
+        passphrase: options.apiPassphrase,
+      };
+    }
+
+    this.signer = options.signer;
 
     log.debug("PolymarketClient initialized", {
       baseUrl: this.baseUrl,
@@ -218,20 +201,70 @@ export class PolymarketClient {
   }
 
   /**
-   * Make an authenticated GET request to the CLOB API.
-   * Uses the clob-client's internal methods to handle authentication.
+   * Extract the path portion of an endpoint (without query string).
+   * The HMAC signature must be computed over the path only,
+   * not including query parameters.
    */
-  private async apiGet<T>(endpoint: string): Promise<T> {
-    // @ts-expect-error - accessing protected method
-    return this.sdk.get(`${this.baseUrl}${endpoint}`) as Promise<T>;
+  private getSignablePath(endpoint: string): string {
+    const queryIndex = endpoint.indexOf("?");
+    return queryIndex >= 0 ? endpoint.substring(0, queryIndex) : endpoint;
+  }
+
+  /**
+   * Make an authenticated GET request to the CLOB API.
+   */
+  private async authenticatedGet<T>(endpoint: string): Promise<T> {
+    if (!this.creds) {
+      throw new PolymarketError("Authentication required", "NO_AUTH");
+    }
+
+    const address = await this.getSignerAddress();
+    // Sign only the path portion (no query string) per CLOB API convention
+    const signablePath = this.getSignablePath(endpoint);
+    const headers = await createL2Headers(address, this.creds, "GET", signablePath);
+    return httpRequest<T>(`${this.baseUrl}${endpoint}`, { headers: headers as unknown as Record<string, string> });
   }
 
   /**
    * Make an authenticated POST request to the CLOB API.
    */
-  private async apiPost<T>(endpoint: string, body?: unknown): Promise<T> {
-    // @ts-expect-error - accessing protected method
-    return this.sdk.post(`${this.baseUrl}${endpoint}`, { body } as any) as Promise<T>;
+  private async authenticatedPost<T>(endpoint: string, body?: unknown): Promise<T> {
+    if (!this.creds) {
+      throw new PolymarketError("Authentication required", "NO_AUTH");
+    }
+
+    // Body must be stringified before passing to createL2Headers for HMAC signing
+    const bodyString = body ? JSON.stringify(body) : undefined;
+    const address = await this.getSignerAddress();
+    // Sign only the path portion (no query string) per CLOB API convention
+    const signablePath = this.getSignablePath(endpoint);
+    const headers = await createL2Headers(address, this.creds, "POST", signablePath, bodyString);
+    return httpRequest<T>(`${this.baseUrl}${endpoint}`, {
+      method: "POST",
+      body,
+      headers: headers as unknown as Record<string, string>,
+    });
+  }
+
+  /**
+   * Make an authenticated DELETE request to the CLOB API.
+   */
+  private async authenticatedDelete<T>(endpoint: string, body?: unknown): Promise<T> {
+    if (!this.creds) {
+      throw new PolymarketError("Authentication required", "NO_AUTH");
+    }
+
+    // Body must be stringified before passing to createL2Headers for HMAC signing
+    const bodyString = body ? JSON.stringify(body) : undefined;
+    const address = await this.getSignerAddress();
+    // Sign only the path portion (no query string) per CLOB API convention
+    const signablePath = this.getSignablePath(endpoint);
+    const headers = await createL2Headers(address, this.creds, "DELETE", signablePath, bodyString);
+    return httpRequest<T>(`${this.baseUrl}${endpoint}`, {
+      method: "DELETE",
+      body,
+      headers: headers as unknown as Record<string, string>,
+    });
   }
 
   // ========================================================================
@@ -245,7 +278,7 @@ export class PolymarketClient {
    * @returns Full market data including tokens and metadata.
    */
   async getMarket(conditionId: string): Promise<Market> {
-    return this.sdk.getMarket(conditionId);
+    return httpRequest<Market>(`${this.baseUrl}/markets/${conditionId}`);
   }
 
   /**
@@ -254,8 +287,8 @@ export class PolymarketClient {
    * @returns Array of market objects.
    */
   async getMarkets(): Promise<Market[]> {
-    const page = await this.sdk.getMarkets();
-    return (page as any).markets ?? (page as any).data ?? page ?? [];
+    const response = await httpRequest<{ markets: Market[] } | Market[]>(`${this.baseUrl}/markets`);
+    return (response as any).markets ?? (response as any).data ?? response ?? [];
   }
 
   /**
@@ -314,32 +347,7 @@ export class PolymarketClient {
       throw new ValidationError(error);
     }
 
-    const ob = await this.sdk.getOrderBook(token.token_id);
-    const hash = await this.sdk.getOrderBookHash(ob);
-
-    const orderbook: Orderbook = {
-      market: marketId,
-      asset_id: token.token_id,
-      bids: ob.bids.map((b: any) => ({
-        price: parseFloat(b.price),
-        size: parseFloat(b.size),
-      })),
-      asks: ob.asks.map((a: any) => ({
-        price: parseFloat(a.price),
-        size: parseFloat(a.size),
-      })),
-      hash,
-    };
-
-    log.debug("Orderbook fetched", {
-      marketId,
-      outcome,
-      assetId: token.token_id,
-      bids: orderbook.bids.length,
-      asks: orderbook.asks.length,
-    });
-
-    return orderbook;
+    return this.getOrderbookByTokenId(token.token_id);
   }
 
   /**
@@ -354,8 +362,12 @@ export class PolymarketClient {
   async getOrderbookByTokenId(tokenId: string): Promise<Orderbook> {
     log.debug("Fetching orderbook by token ID", { tokenId });
 
-    const ob = await this.sdk.getOrderBook(tokenId);
-    const hash = await this.sdk.getOrderBookHash(ob);
+    const ob = await httpRequest<{
+      bids: Array<{ price: string; size: string }>;
+      asks: Array<{ price: string; size: string }>;
+    }>(`${this.baseUrl}/book?token_id=${tokenId}`);
+
+    const hash = await this.hashOrderbook(ob);
 
     const orderbook: Orderbook = {
       market: "",
@@ -380,6 +392,17 @@ export class PolymarketClient {
     return orderbook;
   }
 
+  /**
+   * Calculate SHA-1 hash of orderbook for change detection.
+   */
+  private async hashOrderbook(ob: unknown): Promise<string> {
+    const data = new TextEncoder().encode(JSON.stringify(ob));
+    const hashBuffer = await crypto.subtle.digest("SHA-1", data);
+    return Array.from(new Uint8Array(hashBuffer))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  }
+
   // ========================================================================
   // Orders
   // ========================================================================
@@ -394,6 +417,10 @@ export class PolymarketClient {
    * @returns Response with the order ID, status, and fill info.
    */
   async placeOrder(request: OrderRequest): Promise<OrderResponse> {
+    if (!this.signer) {
+      throw new PolymarketError("Signer required to place orders", "NO_SIGNER");
+    }
+
     // Resolve token ID from outcome name if needed
     let tokenId = request.tokenId;
 
@@ -416,20 +443,9 @@ export class PolymarketClient {
       throw new ValidationError("Either outcome or tokenId must be provided");
     }
 
-    // Build order with the appropriate time-in-force type
-    const orderType =
-      request.type === "GTC"
-        ? ClobOrderType.GTC
-        : request.type === "IOC"
-          ? ClobOrderType.GTD
-          : ClobOrderType.FOK;
-
-    const userOrder = {
-      tokenID: tokenId,
-      price: request.price,
-      size: request.amount,
-      side: request.side === "BUY" ? ClobSide.BUY : ClobSide.SELL,
-    };
+    // Get tick size from market
+    const market = await this.getMarket(request.market);
+    const tickSize = (market as any).minimum_tick_size || "0.01";
 
     log.debug("Placing order", {
       market: request.market,
@@ -441,7 +457,21 @@ export class PolymarketClient {
       outcome: request.outcome,
     });
 
-    const res = await this.sdk.createAndPostOrder(userOrder, {}, orderType as any);
+    // Build and sign the order
+    const signedOrder = await buildSignedOrder({
+      signer: this.signer,
+      tokenId,
+      price: request.price,
+      size: request.amount,
+      side: request.side,
+      tickSize: tickSize as any,
+      feeRateBps: 50, // Default 0.5%
+      signatureType: this.signatureType,
+      funderAddress: this.funderAddress,
+    });
+
+    // Submit to CLOB
+    const res = await this.authenticatedPost("/order", signedOrder);
 
     const orderId = (res as any)?.orderID ?? (res as any)?.orderId ?? (res as any)?.id;
     const errorMsg = (res as any)?.errorMsg ?? (res as any)?.error;
@@ -486,7 +516,7 @@ export class PolymarketClient {
    */
   async cancelOrder(orderId: string): Promise<void> {
     log.debug("Cancelling order", { orderId });
-    await this.sdk.cancelOrder({ orderID: orderId });
+    await this.authenticatedDelete("/order", { orderID: orderId });
     log.info("Order cancelled", { orderId });
   }
 
@@ -496,7 +526,7 @@ export class PolymarketClient {
    * @returns Array of open order objects.
    */
   async getOrders(): Promise<any[]> {
-    return this.sdk.getOpenOrders({});
+    return this.authenticatedGet("/data/orders");
   }
 
   /**
@@ -506,7 +536,7 @@ export class PolymarketClient {
    * @returns Order detail object.
    */
   async getOrder(orderId: string): Promise<any> {
-    return this.sdk.getOrder(orderId);
+    return this.authenticatedGet(`/data/order/${orderId}`);
   }
 
   // ========================================================================
@@ -520,8 +550,13 @@ export class PolymarketClient {
    * @returns Array of trade objects.
    */
   async getTrades(params?: { asset_id?: string; market?: string }): Promise<Trade[]> {
-    const result = await this.sdk.getTrades(params || {});
-    return (result as any)?.data ?? (result as any)?.trades ?? result ?? [];
+    const queryParams = new URLSearchParams();
+    if (params?.asset_id) queryParams.set("asset_id", params.asset_id);
+    if (params?.market) queryParams.set("market", params.market);
+
+    const endpoint = `/data/trades${queryParams.toString() ? `?${queryParams}` : ""}`;
+    const result = await this.authenticatedGet<any>(endpoint);
+    return result?.data ?? result?.trades ?? result ?? [];
   }
 
   // ========================================================================
@@ -534,13 +569,14 @@ export class PolymarketClient {
    * @returns Balance and allowances object.
    */
   async getBalance(): Promise<BalanceAllowance> {
-    const result = await this.sdk.getBalanceAllowance({
-      asset_type: AssetType.COLLATERAL,
-    });
+    const result = await this.authenticatedGet<{
+      balance: string;
+      allowances: Record<string, string>;
+    }>(`/balance-allowance?asset_type=COLLATERAL&signature_type=${this.signatureType}`);
 
     return {
       balance: result.balance,
-      allowances: {},
+      allowances: result.allowances || {},
     };
   }
 
@@ -558,9 +594,7 @@ export class PolymarketClient {
    * Update the collateral allowance for trading.
    */
   async updateAllowance(): Promise<void> {
-    await this.sdk.updateBalanceAllowance({
-      asset_type: AssetType.COLLATERAL,
-    });
+    await this.authenticatedGet("/balance-allowance/update?asset_type=COLLATERAL");
   }
 
   // ========================================================================
@@ -575,7 +609,7 @@ export class PolymarketClient {
    * @returns Array of per-condition earnings.
    */
   async getUserEarnings(date: string): Promise<UserEarning[]> {
-    return this.sdk.getEarningsForUserForDay(date);
+    return this.authenticatedGet(`/rewards/user?date=${date}`);
   }
 
   /**
@@ -586,7 +620,7 @@ export class PolymarketClient {
    * @returns Array of aggregated daily earnings.
    */
   async getTotalUserEarnings(date: string): Promise<TotalUserEarning[]> {
-    return this.sdk.getTotalEarningsForUserForDay(date);
+    return this.authenticatedGet(`/rewards/user/total?date=${date}`);
   }
 
   /**
@@ -605,12 +639,13 @@ export class PolymarketClient {
       no_competition?: boolean;
     }
   ): Promise<UserRewardsEarning[]> {
-    return this.sdk.getUserEarningsAndMarketsConfig(
-      date,
-      options?.order_by,
-      options?.position,
-      options?.no_competition
-    ) as unknown as UserRewardsEarning[];
+    const params = new URLSearchParams();
+    params.set("date", date);
+    if (options?.order_by) params.set("order_by", options.order_by);
+    if (options?.position) params.set("position", options.position);
+    if (options?.no_competition) params.set("no_competition", "true");
+
+    return this.authenticatedGet(`/rewards/user/markets?${params}`);
   }
 
   // ========================================================================
@@ -731,7 +766,7 @@ export class PolymarketClient {
    */
   async getProfile(address: string): Promise<UserProfile> {
     try {
-      const response = await this.apiGet<{
+      const response = await this.authenticatedGet<{
         address?: string;
         username?: string;
         avatar?: string;
@@ -1004,9 +1039,13 @@ export class PolymarketClient {
    */
   private async getSignerAddress(): Promise<string> {
     if (this.signer) {
-      return await this.signer.getAddress();
+      if ("address" in this.signer) {
+        return this.signer.address;
+      }
+      if (this.signer.account) {
+        return this.signer.account.address;
+      }
     }
     throw new PolymarketError("Signer required for default address", "NO_SIGNER");
   }
-
 }

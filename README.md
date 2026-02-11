@@ -12,47 +12,93 @@ bun add polypure
 npm install polypure
 ```
 
-## Browser Compatibility
+## Universal Compatibility (Browser & Node.js)
 
-Polypure works in both Node.js and browser environments.
-
-### Node.js (Full Functionality)
+Polypure is a **universal SDK** that works identically in both Node.js and browser environments. No separate imports needed!
 
 ```typescript
-import { createClientFromPrivateKey, getSeries } from "polypure";
+// Same import works everywhere
+import { createClientFromPrivateKey, getSeries, getProfile } from "polypure";
 
-// Full SDK with trading, orders, authentication
+// Browser: Read-only market data
+const series = await getSeries("highest-temperature-in-london-on-february-3-2026");
+
+// Node.js: Full trading functionality
 const client = await createClientFromPrivateKey({
   privateKey: process.env.POLYMARKET_PRIVATE_KEY!,
   funderAddress: process.env.POLYMARKET_FUNDER_ADDRESS!,
 });
+await client.placeOrder({ market: "0x...", side: "BUY", amount: 100, price: 0.65, outcome: "YES" });
 ```
 
-### Browser (Read-Only Market Data)
+### What Changed?
 
-For browser environments, use the browser-specific export to avoid Node.js-only dependencies:
+- **✅ Universal SDK**: Same code runs in browsers and Node.js
+- **✅ No Node.js-only dependencies**: Removed Winston, @ethersproject/wallet, @polymarket/clob-client
+- **✅ Modern web standards**: Uses Web Crypto API, native fetch, and viem
+- **✅ 6x smaller bundle**: Down from 1.36MB to ~220KB
+- **✅ Simplified imports**: Everything from `import { ... } from "polypure"`
+
+### Browser Usage
+
+All read-only functions work in browsers without authentication:
 
 ```typescript
-// Import the browser-compatible version
-import { getSeries, searchSeries } from "polypure/browser";
+import {
+  getSeries,
+  searchSeries,
+  getProfile,
+  getUserPositions,
+  getUserTrades,
+} from "polypure";
 
-// Market discovery works in browsers
-const series = await getSeries("highest-temperature-in-london-on-february-3-2026");
-console.log(series?.title);
+// Market discovery
+const series = await getSeries("btc-updown-15m-1770929100");
+
+// Profile queries (public data)
+const profile = await getProfile("0xabc123...");
+const positions = await getUserPositions("0xabc123...");
+const trades = await getUserTrades({ address: "0xabc123...", limit: 20 });
 ```
 
-**Note:** The browser build excludes authenticated features (placing orders, portfolio management) that require Node.js-specific dependencies like `@polymarket/clob-client`. For trading functionality, use the Node.js build.
+### Authentication (Node.js or Secure Browser Environments)
 
-**Bundler Configuration:**
-
-Most modern bundlers (Vite, Webpack, Rollup) will automatically resolve the browser export when importing from `"polypure"`:
+Trading features require private key access:
 
 ```typescript
-// Bundlers will auto-resolve to browser build
-import { getSeries } from "polypure";
+import { createClientFromPrivateKey } from "polypure";
+
+const client = await createClientFromPrivateKey({
+  privateKey: process.env.POLYMARKET_PRIVATE_KEY!,
+  funderAddress: process.env.POLYMARKET_FUNDER_ADDRESS!,
+  signatureType: 1, // 0 = Browser Wallet, 1 = Magic/Email (default)
+});
+
+// Now you can trade
+await client.placeOrder({ ... });
+await client.getBalance();
+await client.getOrders();
 ```
 
-If your bundler doesn't support conditional exports, import explicitly from `"polypure/browser"`.
+**Note:** Private keys should never be exposed in client-side browser code. Use trading features only in:
+- Node.js backends
+- Secure browser environments (e.g., electron apps with secure storage)
+- Serverless functions
+
+### Available Everywhere
+
+| Function | Browser | Node.js | Description |
+|----------|---------|---------|-------------|
+| `getSeries(slug)` | ✅ | ✅ | Get series/event by slug |
+| `searchSeries(query, options)` | ✅ | ✅ | Search for series |
+| `getProfile(address)` | ✅ | ✅ | Get public profile for any address |
+| `getUserPositions(address)` | ✅ | ✅ | Get positions for any user |
+| `getUserTrades(options)` | ✅ | ✅ | Get trades for any user |
+| `createClientFromPrivateKey(config)` | ⚠️* | ✅ | Create authenticated client |
+| `placeOrder(request)` | ⚠️* | ✅ | Place a trade |
+| `getBalance()` | ⚠️* | ✅ | Get USDC balance |
+
+*⚠️ Requires secure private key storage - not recommended for standard browser apps
 
 ## MCP Server (AI Agent Integration)
 
@@ -76,7 +122,7 @@ See **[MCP.md](./MCP.md)** for full setup instructions, tool reference, and conf
 
 ## Logging
 
-The SDK uses Winston for structured JSON logging. All logs are written to console in JSON format for easy parsing and analysis.
+The SDK uses a lightweight logger for structured JSON logging. All logs are written to console in JSON format for easy parsing and analysis.
 
 ### Environment Variables
 
@@ -129,6 +175,28 @@ log.info("Info message", { requestId: "abc-123" });
 log.warn("Warning message", { retryAttempt: 3 });
 log.error("Error occurred", new Error("Something went wrong"));
 ```
+
+---
+
+## Architecture Changes
+
+### What's New in v1.5.0
+
+**Universal SDK** - Works identically in browsers and Node.js:
+- Removed Node.js-only dependencies (`winston`, `@ethersproject/wallet`, `@polymarket/clob-client`)
+- Unified entry point - no more separate `polypure/browser` import
+- Uses modern web standards: Web Crypto API, native fetch, viem
+- Bundle size reduced from 1.36MB to ~220KB (6x smaller)
+
+**Modern Authentication**:
+- HMAC-SHA256 via Web Crypto API (works in browsers and Node.js 18+)
+- EIP-712 signing via viem (universal, works everywhere)
+- Direct fetch() with auth headers (no SDK wrapper dependency)
+
+**Simplified API**:
+- All imports from single entry point: `import { ... } from "polypure"`
+- Same authentication flow in all environments
+- Cleaner dependency tree
 
 ## Quick Start
 
@@ -1233,7 +1301,7 @@ import {
   VERSION 
 } from "polypure";
 
-console.log(VERSION);  // "0.2.0"
+console.log(VERSION);  // "1.5.0"
 ```
 
 ---

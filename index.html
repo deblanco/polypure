@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Polypure - Polymarket SDK Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-tertiary: #1a1a25;
+      --bg-elevated: #222230;
+      --accent-primary: #3b82f6;
+      --accent-secondary: #8b5cf6;
+      --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --border-color: rgba(148, 163, 184, 0.1);
+      --success: #10b981;
+      --warning: #f59e0b;
+      --error: #ef4444;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+      --shadow-glow: 0 0 40px rgba(59, 130, 246, 0.15);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Header */
+    header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+      background-color: rgba(18, 18, 26, 0.8);
+    }
+
+    .header-content {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 72px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 700;
+      font-size: 1.5rem;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: var(--accent-gradient);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      -webkit-text-fill-color: white;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 32px;
+    }
+
+    .nav-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 0.9rem;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover {
+      color: var(--text-primary);
+    }
+
+    .github-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+    }
+
+    .github-btn:hover {
+      background: var(--bg-elevated);
+      border-color: var(--accent-primary);
+    }
+
+    /* Hero */
+    .hero {
+      padding: 80px 0 60px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 800px;
+      height: 800px;
+      background: radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero h1 {
+      font-size: 3.5rem;
+      font-weight: 700;
+      line-height: 1.1;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, #f8fafc 0%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero p {
+      font-size: 1.25rem;
+      color: var(--text-secondary);
+      max-width: 600px;
+      margin: 0 auto 40px;
+    }
+
+    .hero-badges {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 100px;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+
+    .badge svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    /* Install Section */
+    .install-section {
+      padding: 40px 0 60px;
+    }
+
+    .install-box {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .install-box::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: var(--accent-gradient);
+    }
+
+    .install-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .install-tab {
+      padding: 8px 16px;
+      background: transparent;
+      border: none;
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      font-family: inherit;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .install-tab.active {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    .install-tab:hover:not(.active) {
+      color: var(--text-primary);
+    }
+
+    .code-block {
+      background: var(--bg-primary);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      overflow-x: auto;
+      position: relative;
+    }
+
+    .code-block .comment {
+      color: var(--text-muted);
+    }
+
+    .code-block .keyword {
+      color: #c792ea;
+    }
+
+    .code-block .string {
+      color: #c3e88d;
+    }
+
+    .code-block .function {
+      color: #82aaff;
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      padding: 6px 12px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+    }
+
+    /* Playground */
+    .playground {
+      padding: 60px 0;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    .section-header h2 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .section-header p {
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+    }
+
+    .playground-grid {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 24px;
+    }
+
+    .sidebar {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+    }
+
+    .sidebar h3 {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    .method-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .method-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      background: transparent;
+      border: none;
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .method-btn:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    .method-btn.active {
+      background: var(--accent-primary);
+      color: white;
+    }
+
+    .method-btn .tag {
+      margin-left: auto;
+      padding: 2px 8px;
+      background: var(--bg-primary);
+      border-radius: 4px;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .method-btn.active .tag {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .main-panel {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .panel-header h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .panel-body {
+      flex: 1;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      min-height: 500px;
+    }
+
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .input-group label {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .input-group input,
+    .input-group select {
+      padding: 12px 16px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9rem;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    .input-group input:focus,
+    .input-group select:focus {
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .input-group input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .run-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 24px;
+      background: var(--accent-gradient);
+      border: none;
+      border-radius: var(--radius-md);
+      color: white;
+      font-family: inherit;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .run-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-glow);
+    }
+
+    .run-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .run-btn.loading {
+      pointer-events: none;
+    }
+
+    .run-btn.loading::after {
+      content: '';
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .result-panel {
+      background: var(--bg-primary);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .result-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .result-header span {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .result-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .result-actions button {
+      padding: 4px 12px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .result-actions button:hover {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+    }
+
+    .result-content {
+      flex: 1;
+      padding: 16px;
+      overflow: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      line-height: 1.6;
+    }
+
+    .result-content pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .result-content .string { color: #c3e88d; }
+    .result-content .number { color: #f78c6c; }
+    .result-content .boolean { color: #ff5370; }
+    .result-content .null { color: #ff5370; }
+    .result-content .key { color: #82aaff; }
+
+    .result-content .error {
+      color: var(--error);
+    }
+
+    .result-content .empty {
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    /* Features */
+    .features {
+      padding: 60px 0;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+    }
+
+    .feature-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      transition: all 0.3s;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--accent-primary);
+      box-shadow: var(--shadow-glow);
+    }
+
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      background: var(--bg-tertiary);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      margin-bottom: 20px;
+    }
+
+    .feature-card h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .feature-card p {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    /* Footer */
+    footer {
+      padding: 40px 0;
+      border-top: 1px solid var(--border-color);
+      text-align: center;
+    }
+
+    footer p {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    footer a {
+      color: var(--accent-primary);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .playground-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        order: 2;
+      }
+
+      .hero h1 {
+        font-size: 2.5rem;
+      }
+
+      .nav-links {
+        display: none;
+      }
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 16px 24px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      font-weight: 500;
+      box-shadow: var(--shadow-lg);
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s;
+      z-index: 1000;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .toast.success {
+      border-color: var(--success);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="header-content">
+        <div class="logo">
+          <div class="logo-icon">📊</div>
+          Polypure
+        </div>
+        <nav class="nav-links">
+          <a href="#playground">Playground</a>
+          <a href="#features">Features</a>
+          <a href="https://github.com/deblanco/polypure" target="_blank">GitHub</a>
+        </nav>
+        <a href="https://github.com/deblanco/polypure" target="_blank" class="github-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+          </svg>
+          Star on GitHub
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="container">
+      <h1>Polymarket SDK</h1>
+      <p>A thin, zero-dependency TypeScript SDK for prediction markets. Universal - works in browsers and Node.js.</p>
+      <div class="hero-badges">
+        <span class="badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+          Zero Dependencies
+        </span>
+        <span class="badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+            <line x1="8" y1="21" x2="16" y2="21"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+          </svg>
+          Browser + Node.js
+        </span>
+        <span class="badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          TypeScript
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <section class="install-section">
+    <div class="container">
+      <div class="install-box">
+        <div class="install-tabs">
+          <button class="install-tab active" data-tab="npm">npm</button>
+          <button class="install-tab" data-tab="bun">bun</button>
+          <button class="install-tab" data-tab="cdn">CDN</button>
+        </div>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <code id="install-code"><span class="comment"># Install with npm</span>
+npm install polypure</code>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="playground" id="playground">
+    <div class="container">
+      <div class="section-header">
+        <h2>Interactive Playground</h2>
+        <p>Try the SDK directly in your browser. No API keys needed for read-only operations.</p>
+      </div>
+
+      <div class="playground-grid">
+        <aside class="sidebar">
+          <h3>Read-Only Methods</h3>
+          <div class="method-list">
+            <button class="method-btn active" data-method="getSeries">
+              getSeries()
+              <span class="tag">Market</span>
+            </button>
+            <button class="method-btn" data-method="searchSeries">
+              searchSeries()
+              <span class="tag">Market</span>
+            </button>
+            <button class="method-btn" data-method="getProfile">
+              getProfile()
+              <span class="tag">User</span>
+            </button>
+            <button class="method-btn" data-method="getUserPositions">
+              getUserPositions()
+              <span class="tag">User</span>
+            </button>
+            <button class="method-btn" data-method="getUserTrades">
+              getUserTrades()
+              <span class="tag">User</span>
+            </button>
+          </div>
+        </aside>
+
+        <div class="main-panel">
+          <div class="panel-header">
+            <h3 id="panel-title">Get Series</h3>
+          </div>
+          <div class="panel-body">
+            <div id="input-container">
+              <div class="input-group">
+                <label for="param-slug">Series Slug</label>
+                <input type="text" id="param-slug" placeholder="e.g., will-bitcoin-hit-100k-2024" value="will-bitcoin-hit-100k-2024">
+              </div>
+            </div>
+
+            <button class="run-btn" id="run-btn" onclick="runMethod()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="5 3 19 12 5 21 5 3"/>
+              </svg>
+              Run Code
+            </button>
+
+            <div class="result-panel">
+              <div class="result-header">
+                <span>Result</span>
+                <div class="result-actions">
+                  <button onclick="copyResult()">Copy</button>
+                  <button onclick="clearResult()">Clear</button>
+                </div>
+              </div>
+              <div class="result-content" id="result">
+                <span class="empty">Click "Run Code" to see the result</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="features" id="features">
+    <div class="container">
+      <div class="section-header">
+        <h2>Why Polypure?</h2>
+        <p>Built for developers who want clean, predictable tools</p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🚀</div>
+          <h3>Universal SDK</h3>
+          <p>Same code runs in browsers and Node.js. No separate imports needed. Bundle size reduced from 1.36MB to ~220KB.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <h3>Zero Dependencies</h3>
+          <p>No runtime dependencies. Uses modern web standards: Web Crypto API, native fetch, and viem for blockchain operations.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <h3>Type Safe</h3>
+          <p>Full TypeScript support with comprehensive type definitions. Auto-completion and type checking out of the box.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🤖</div>
+          <h3>MCP Server</h3>
+          <p>Includes a Model Context Protocol server for AI agents. 19 tools covering market discovery, portfolio tracking, and trading.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🛠️</div>
+          <h3>Full CLI</h3>
+          <p>Command-line interface for trading and market discovery. Script-friendly with JSON output support.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📈</div>
+          <h3>Orderbook Tools</h3>
+          <p>Built-in utilities for analyzing orderbooks: best prices, depth calculation, spread analysis, arbitrage detection.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <p>MIT Licensed · Created by <a href="https://github.com/deblanco" target="_blank">@deblanco</a> · <a href="https://github.com/deblanco/polypure" target="_blank">View on GitHub</a></p>
+    </div>
+  </footer>
+
+  <div class="toast" id="toast">Copied to clipboard!</div>
+
+  <script type="module">
+    import * as polypure from 'https://unpkg.com/polypure@latest/dist/index.js';
+    
+    window.polypure = polypure;
+
+    const methodConfigs = {
+      getSeries: {
+        title: 'Get Series',
+        inputs: [
+          { name: 'slug', label: 'Series Slug', placeholder: 'e.g., will-bitcoin-hit-100k-2024', value: 'will-bitcoin-hit-100k-2024' }
+        ],
+        run: async (inputs) => {
+          return await polypure.getSeries(inputs.slug);
+        }
+      },
+      searchSeries: {
+        title: 'Search Series',
+        inputs: [
+          { name: 'query', label: 'Search Query', placeholder: 'e.g., bitcoin', value: 'bitcoin' },
+          { name: 'limit', label: 'Limit (optional)', placeholder: '10', value: '5' }
+        ],
+        run: async (inputs) => {
+          const limit = inputs.limit ? parseInt(inputs.limit) : 5;
+          return await polypure.searchSeries(inputs.query, { limit });
+        }
+      },
+      getProfile: {
+        title: 'Get Profile',
+        inputs: [
+          { name: 'address', label: 'Wallet Address', placeholder: '0x...', value: '0x0000000000000000000000000000000000000000' }
+        ],
+        run: async (inputs) => {
+          return await polypure.getProfile(inputs.address);
+        }
+      },
+      getUserPositions: {
+        title: 'Get User Positions',
+        inputs: [
+          { name: 'address', label: 'Wallet Address', placeholder: '0x...', value: '0x0000000000000000000000000000000000000000' }
+        ],
+        run: async (inputs) => {
+          return await polypure.getUserPositions(inputs.address);
+        }
+      },
+      getUserTrades: {
+        title: 'Get User Trades',
+        inputs: [
+          { name: 'address', label: 'Wallet Address', placeholder: '0x...', value: '0x0000000000000000000000000000000000000000' },
+          { name: 'limit', label: 'Limit (optional)', placeholder: '20', value: '10' }
+        ],
+        run: async (inputs) => {
+          const limit = inputs.limit ? parseInt(inputs.limit) : 10;
+          return await polypure.getUserTrades({ address: inputs.address, limit });
+        }
+      }
+    };
+
+    let currentMethod = 'getSeries';
+
+    window.switchMethod = (method) => {
+      currentMethod = method;
+      const config = methodConfigs[method];
+      
+      document.getElementById('panel-title').textContent = config.title;
+      
+      const container = document.getElementById('input-container');
+      container.innerHTML = config.inputs.map(input => `
+        <div class="input-group">
+          <label for="param-${input.name}">${input.label}</label>
+          <input type="text" id="param-${input.name}" placeholder="${input.placeholder}" value="${input.value || ''}">
+        </div>
+      `).join('');
+
+      document.querySelectorAll('.method-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.method === method);
+      });
+
+      clearResult();
+    };
+
+    window.runMethod = async () => {
+      const btn = document.getElementById('run-btn');
+      const resultEl = document.getElementById('result');
+      
+      btn.classList.add('loading');
+      btn.disabled = true;
+      
+      try {
+        const config = methodConfigs[currentMethod];
+        const inputs = {};
+        config.inputs.forEach(input => {
+          inputs[input.name] = document.getElementById(`param-${input.name}`).value;
+        });
+
+        const result = await config.run(inputs);
+        resultEl.innerHTML = `<pre>${syntaxHighlight(JSON.stringify(result, null, 2))}</pre>`;
+      } catch (error) {
+        resultEl.innerHTML = `<span class="error">Error: ${error.message}</span>`;
+      } finally {
+        btn.classList.remove('loading');
+        btn.disabled = false;
+      }
+    };
+
+    window.clearResult = () => {
+      document.getElementById('result').innerHTML = '<span class="empty">Click "Run Code" to see the result</span>';
+    };
+
+    window.copyResult = () => {
+      const resultEl = document.getElementById('result');
+      const text = resultEl.textContent;
+      if (text && !text.includes('Click "Run Code"')) {
+        navigator.clipboard.writeText(text);
+        showToast('Copied to clipboard!');
+      }
+    };
+
+    function syntaxHighlight(json) {
+      return json.replace(/(".*?"|:|true|false|null|\d+)/g, match => {
+        if (match === ':') return match;
+        if (/^"/.test(match)) return `<span class="string">${match}</span>`;
+        if (/true|false/.test(match)) return `<span class="boolean">${match}</span>`;
+        if (/null/.test(match)) return `<span class="null">${match}</span>`;
+        if (/^-?\d/.test(match)) return `<span class="number">${match}</span>`;
+        return match;
+      }).replace(/"(\w+)":/g, '"<span class="key">$1</span>":');
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.add('show', 'success');
+      setTimeout(() => toast.classList.remove('show', 'success'), 3000);
+    }
+
+    document.querySelectorAll('.method-btn').forEach(btn => {
+      btn.addEventListener('click', () => switchMethod(btn.dataset.method));
+    });
+
+    const installCode = {
+      npm: `<span class="comment"># Install with npm</span>
+npm install polypure`,
+      bun: `<span class="comment"># Install with bun</span>
+bun add polypure`,
+      cdn: `<span class="comment">// ES Modules (browser)</span>
+<span class="keyword">import</span> * <span class="keyword">as</span> polypure <span class="keyword">from</span> <span class="string">'https://unpkg.com/polypure@latest/dist/index.js'</span>;
+
+<span class="comment">// Or use the global</span>
+&lt;script <span class="keyword">type</span>=<span class="string">"module"</span>&gt;
+  <span class="keyword">const</span> { getSeries } = <span class="keyword">await</span> <span class="function">import</span>(<span class="string">'https://unpkg.com/polypure@latest/dist/index.js'</span>);
+&lt;/script&gt;`
+    };
+
+    document.querySelectorAll('.install-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.install-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('install-code').innerHTML = installCode[tab.dataset.tab];
+      });
+    });
+
+    window.copyCode = (btn) => {
+      const code = document.getElementById('install-code').textContent;
+      navigator.clipboard.writeText(code.replace(/^# .+\n/, '').trim());
+      showToast('Copied to clipboard!');
+    };
+  </script>
+</body>
+</html>

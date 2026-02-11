@@ -64,7 +64,7 @@ function getPrivateKeyConfig(): PrivateKeyConfig | null {
 
   const signatureType = parseInt(process.env.POLYMARKET_SIGNATURE_TYPE || "1") as 0 | 1;
 
-  return { privateKey, funderAddress, signatureType };
+  return { privateKey: privateKey as `0x${string}`, funderAddress, signatureType };
 }
 
 /**

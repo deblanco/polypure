@@ -109,6 +109,17 @@ export {
   parseOutcomes,
 } from "./gamma.js";
 
+// ── Profile Queries (public, no auth required) ──────────────────────────────
+// These also work in browser environments
+export {
+  getProfile,
+  getUserPositions,
+  getMarketPositions,
+  getAllUserPositions,
+  getUserTrades,
+  getAllTradesForUser,
+} from "./profiles.js";
+
 // ── Utilities ───────────────────────────────────────────────────────────────
 export {
   getTickSize,
@@ -125,4 +136,52 @@ export {
 
 // ── Logger ──────────────────────────────────────────────────────────────────
 export { log, logger } from "./logger.js";
-export type { Logger } from "winston";
+export type { Logger } from "./logger.js";
+
+// ── Auth Module ─────────────────────────────────────────────────────────────
+export {
+  signHmac,
+  buildL2Message,
+  signClobAuth,
+  generateNonce,
+  getTimestamp,
+  CLOB_AUTH_DOMAIN,
+  CLOB_AUTH_TYPES,
+  createL1Headers,
+  createL2Headers,
+  deriveApiKey,
+  createApiKey,
+  createOrDeriveApiKey,
+  type ApiCredentials,
+  type L1Headers,
+  type L2Headers,
+} from "./auth/index.js";
+
+// ── Order Builder Module ────────────────────────────────────────────────────
+export {
+  EXCHANGE_ADDRESS,
+  NEG_RISK_EXCHANGE_ADDRESS,
+  NEG_RISK_ADAPTER_ADDRESS,
+  COLLATERAL_TOKEN,
+  CONDITIONAL_TOKEN,
+  COLLATERAL_TOKEN_DECIMALS,
+  CONDITIONAL_TOKEN_DECIMALS,
+  CHAIN_ID,
+  ORDER_DOMAIN,
+  ORDER_TYPES,
+  ROUNDING_CONFIG,
+  SignatureType as OrderSignatureType,
+  DEFAULT_EXPIRATION,
+  DEFAULT_FEE_RATE_BPS,
+  DEFAULT_TAKER,
+  roundDown,
+  roundNormal,
+  calculateBuyAmounts,
+  calculateSellAmounts,
+  calculateMarketBuyAmounts,
+  generateSalt,
+  buildSignedOrder,
+  type TickSize,
+  type SignedOrder,
+  type BuildOrderParams,
+} from "./order-builder/index.js";

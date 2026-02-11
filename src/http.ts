@@ -1,11 +1,10 @@
 /**
  * Lightweight HTTP helper for Polypure SDK.
  *
- * Wraps the native `fetch` API with JSON serialization, error handling,
- * and structured logging. Used internally by the client and Gamma modules.
+ * Wraps the native `fetch` API with JSON serialization and error handling.
+ * Used internally by the client and Gamma modules.
  */
 
-import { log } from "./logger.js";
 import { PolymarketError } from "./errors.js";
 import type { RequestOptions } from "./types/client.js";
 
@@ -25,12 +24,6 @@ export async function httpRequest<T>(
 ): Promise<T> {
   const method = options.method || "GET";
 
-  log.debug("HTTP request", {
-    url,
-    method,
-    hasBody: !!options.body,
-  });
-
   const response = await fetch(url, {
     method,
     headers: {
@@ -43,23 +36,8 @@ export async function httpRequest<T>(
   if (!response.ok) {
     const text = await response.text();
     const error = `HTTP ${response.status}: ${text}`;
-    log.error("HTTP request failed", {
-      url,
-      method,
-      status: response.status,
-      statusText: response.statusText,
-      responseText: text,
-    });
     throw new PolymarketError(error, "HTTP_ERROR", response.status);
   }
 
-  const data = (await response.json()) as Promise<T>;
-
-  log.debug("HTTP request succeeded", {
-    url,
-    method,
-    status: response.status,
-  });
-
-  return data;
+  return (await response.json()) as Promise<T>;
 }

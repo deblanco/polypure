@@ -18,4 +18,4 @@ export const GAMMA_API_BASE = "https://gamma-api.polymarket.com";
 export const DATA_API_BASE = "https://data-api.polymarket.com";
 
 /** Current SDK version. */
-export const VERSION = "0.4.0";
+export const VERSION = "1.5.0";

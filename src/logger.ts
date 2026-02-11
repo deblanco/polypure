@@ -1,45 +1,49 @@
-import winston from 'winston';
+/**
+ * Browser-compatible logger stub.
+ * Logs to console instead of using winston.
+ */
 
-// Get log level from environment, default to debug
-const LOG_LEVEL = process.env.LOG_LEVEL || 'debug';
+const LOG_LEVEL = (typeof process !== "undefined" && process.env?.LOG_LEVEL) || "debug";
 
-// JSON format for all console logs
-const jsonFormat = winston.format.combine(
-  winston.format.timestamp(),
-  winston.format.errors({ stack: true }),
-  winston.format.json()
-);
+const levels: Record<string, number> = {
+  error: 0,
+  warn: 1,
+  info: 2,
+  debug: 3,
+};
 
-// Console transport with JSON format -- writes to stderr to keep stdout clean
-// (important when running as an MCP server where stdout is the protocol channel)
-const consoleTransport = new winston.transports.Console({
-  format: jsonFormat,
-  level: 'debug',
-  stderrLevels: ['error', 'warn', 'info', 'debug', 'verbose', 'silly'],
-});
+const currentLevel = levels[LOG_LEVEL] ?? 3;
 
-// Create logger instance (console only, no file logging)
-export const logger = winston.createLogger({
-  level: LOG_LEVEL,
-  format: jsonFormat,
-  transports: [
-    consoleTransport,
-  ],
-});
+function shouldLog(level: string): boolean {
+  return (levels[level] ?? 3) <= currentLevel;
+}
 
-// Convenience methods with consistent signature
-export const log = {
-  debug: (message: string, meta?: any) => logger.debug(message, meta),
-  info: (message: string, meta?: any) => logger.info(message, meta),
-  warn: (message: string, meta?: any) => logger.warn(message, meta),
+export const logger = {
+  debug: (message: string, meta?: any) => {
+    if (shouldLog("debug")) {
+      console.debug(JSON.stringify({ level: "debug", message, ...meta, timestamp: new Date().toISOString() }));
+    }
+  },
+  info: (message: string, meta?: any) => {
+    if (shouldLog("info")) {
+      console.info(JSON.stringify({ level: "info", message, ...meta, timestamp: new Date().toISOString() }));
+    }
+  },
+  warn: (message: string, meta?: any) => {
+    if (shouldLog("warn")) {
+      console.warn(JSON.stringify({ level: "warn", message, ...meta, timestamp: new Date().toISOString() }));
+    }
+  },
   error: (message: string, error?: Error | any) => {
-    // Errors are always printed
     const errorMeta = error instanceof Error
       ? { error_message: error.message, stack: error.stack }
       : error;
-    logger.error(message, errorMeta);
+    console.error(JSON.stringify({ level: "error", message, ...errorMeta, timestamp: new Date().toISOString() }));
   },
 };
 
-// Export winston logger for advanced usage
+export const log = logger;
+
 export default logger;
+
+export type Logger = typeof logger;

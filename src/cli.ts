@@ -193,7 +193,7 @@ async function createClient(options: CliOptions = {}): Promise<PolymarketClient>
   }
 
   return createClientFromPrivateKey({
-    privateKey,
+    privateKey: privateKey as `0x${string}`,
     funderAddress,
     signatureType,
   });
@@ -827,23 +827,28 @@ async function cmdUserTrades(args: string[], options: CliOptions): Promise<void>
     limit: options.limit || 20,
   });
 
-  if (options.json) {
-    output(trades, options);
-  } else {
-    console.log(`📜 Trades for ${address.substring(0, 8)}...${address.substring(38)} (${trades.trades.length} shown):`);
+  // Sort by match_time descending (most recent first)
+  const sortedTrades = [...trades.trades].sort((a, b) => 
+    new Date(b.match_time).getTime() - new Date(a.match_time).getTime()
+  );
 
-    if (trades.trades.length === 0) {
+  if (options.json) {
+    output({ ...trades, trades: sortedTrades }, options);
+  } else {
+    console.log(`📜 Trades for ${address.substring(0, 8)}...${address.substring(38)} (${sortedTrades.length} shown):`);
+
+    if (sortedTrades.length === 0) {
       console.log("   No trades found");
       return;
     }
 
-    for (const trade of trades.trades) {
+    for (const trade of sortedTrades) {
       const icon = trade.side === "BUY" ? "🟢" : "🔴";
-      const date = new Date(trade.match_time).toLocaleDateString();
+      const date = new Date(trade.match_time).toLocaleString();
       const displayTitle = trade.title || trade.market;
       console.log(`\n   ${icon} ${displayTitle.length > 60 ? displayTitle.substring(0, 60) + "..." : displayTitle}`);
       console.log(`      ${trade.side} ${trade.size} @ ${Number(trade.price).toFixed(4)}`);
-      console.log(`      Date: ${date}`);
+      console.log(`      Time: ${date}`);
       console.log(`      Outcome: ${trade.outcome || "Unknown"}`);
     }
   }
